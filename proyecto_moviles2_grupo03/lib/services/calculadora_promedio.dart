@@ -1,4 +1,3 @@
-import '../models/componente_evaluacion.dart';
 
 class CalculadoraPromedio {
   /// Valida que existan al menos 2 componentes
