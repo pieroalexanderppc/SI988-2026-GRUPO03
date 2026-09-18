@@ -108,11 +108,5 @@ proyecto_moviles2_grupo03/
 
 ---
 
-##  Guía de Defensa Oral ante el Docente
-
-| Pregunta del Docente | Respuesta Recomendada |
-| :--- | :--- |
-| **¿Dónde se guarda el token y por qué no la contraseña?** | *«Profesor, se guarda en `SharedPreferences` (archivo XML privado en Android / localStorage en Web). Nunca se guarda la contraseña por directrices de seguridad (OWASP Mobile); el token representa una credencial temporal que valida la sesión sin comprometer las credenciales del alumno.»* |
-| **¿Cómo funciona el Auto-Login al reabrir la app?** | *«En el `main.dart`, antes de mostrar cualquier pantalla, el servicio `AuthService` consulta si existe la llave `auth_token`. Si existe y es válida, el estado inicial redirige de forma transparente al `HomeScreen`, conservando los datos del usuario.»* |
 | **¿Por qué no usar `double` para el saldo monetario?** | *«Porque `double` utiliza el estándar IEEE-754 de coma flotante, susceptible a errores de aproximación binaria en centavos. Para evitarlo, mapeamos el saldo en céntimos enteros (`int`) y conservamos el texto exacto (`String`).»* |
 | **¿Qué ocurre si el backend envía un ID de 19 dígitos o claves inesperadas?** | *«El modelo parsea el ID estrictamente como `String` para evitar desbordamientos de enteros de 64 bits o notación científica. Además, cualquier clave ajena es descartada sin romper el ciclo de vida de la aplicación.»* |
