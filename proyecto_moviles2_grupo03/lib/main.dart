@@ -22,13 +22,13 @@ void main() async {
   // Flujo de arranque: Verificar persistencia local y Auto-Login (Punto 1)
   final authService = AuthService();
   final bool estaAutenticado = await authService.estaAutenticado();
-  final UsuarioModel? usuario =
-      estaAutenticado ? await authService.obtenerUsuarioActual() : null;
+  final UsuarioModel? usuario = estaAutenticado
+      ? await authService.obtenerUsuarioActual()
+      : null;
 
-  runApp(PromedioApp(
-    estaAutenticado: estaAutenticado,
-    usuarioInicial: usuario,
-  ));
+  runApp(
+    PromedioApp(estaAutenticado: estaAutenticado, usuarioInicial: usuario),
+  );
 }
 
 /// Widget raíz de la aplicación PromedioApp con soporte de Auto-Login.
@@ -64,4 +64,3 @@ class PromedioApp extends StatelessWidget {
     );
   }
 }
-
