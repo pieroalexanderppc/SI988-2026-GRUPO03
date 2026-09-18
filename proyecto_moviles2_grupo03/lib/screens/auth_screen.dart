@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/firebase_auth_repository.dart';
 import '../services/login_use_case.dart';
@@ -66,10 +67,15 @@ class _AuthScreenState extends State<AuthScreen> {
         _error = e.message.toString();
       });
     } on FirebaseAuthException catch (e) {
+      print('ERROR FIREBASE: ${e.code}');
+      print('MENSAJE FIREBASE: ${e.message}');
+
       setState(() {
-        _error = _mensajeFirebase(e.code);
+        _error = '${e.code}: ${e.message}';
       });
     } catch (e) {
+      print('ERROR GENERAL: $e');
+
       setState(() {
         _error = 'Ocurrió un error: $e';
       });
@@ -79,30 +85,6 @@ class _AuthScreenState extends State<AuthScreen> {
           _cargando = false;
         });
       }
-    }
-  }
-
-  String _mensajeFirebase(String code) {
-    switch (code) {
-      case 'invalid-credential':
-      case 'wrong-password':
-      case 'user-not-found':
-        return 'Correo o contraseña incorrectos.';
-
-      case 'email-already-in-use':
-        return 'El correo ya está registrado.';
-
-      case 'invalid-email':
-        return 'El correo no es válido.';
-
-      case 'weak-password':
-        return 'La contraseña es demasiado débil.';
-
-      case 'too-many-requests':
-        return 'Demasiados intentos. Intenta nuevamente más tarde.';
-
-      default:
-        return 'No se pudo completar la operación.';
     }
   }
 
@@ -151,6 +133,11 @@ class _AuthScreenState extends State<AuthScreen> {
                   controller: _correoController,
                   keyboardType:
                       TextInputType.emailAddress,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(
+                      RegExp(r'\s'),
+                    ),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Correo electrónico',
                     prefixIcon:
