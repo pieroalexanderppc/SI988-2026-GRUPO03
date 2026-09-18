@@ -1,6 +1,6 @@
 # SI-988 Soluciones Móviles II - Examen Práctico Unidad 1
 
-## 📌 Información del Estudiante y Examen
+## Información del Estudiante y Examen
 * **Estudiante:** Elvis Mamani Valdivia
 * **Código:** `2020068763`
 * **Correo Institucional:** `elvmamani@upt.pe`
@@ -11,13 +11,13 @@
 
 ---
 
-## 🎯 Resumen Ejecutivo de la Solución
+ Resumen Ejecutivo de la Solución
 
 El objetivo principal de este desarrollo es garantizar que la aplicación móvil sea **altamente tolerante a fallos**, permitiendo consumir, mapear y persistir información proveniente de payloads JSON inconsistentes, corruptos o con cambios de estructura imprevistos sin provocar cierres inesperados (*crashes*) ni pérdidas de precisión en datos sensibles.
 
 ---
 
-## 🚀 Detalle de Implementación por Puntos
+## Detalle de Implementación por Puntos
 
 ### 🔹 Punto 1: Persistencia Local y Auto-Login (4 puntos)
 * **Objetivo:** Almacenar de forma segura la sesión del usuario para restaurarla automáticamente al reiniciar la app o matar el proceso.
@@ -64,7 +64,7 @@ El objetivo principal de este desarrollo es garantizar que la aplicación móvil
 
 El proyecto cuenta con una suite completa de pruebas unitarias implementadas con `flutter_test`.
 
-### 📋 Cobertura de Pruebas:
+###  Cobertura de Pruebas:
 1. `test/auth_service_test.dart`:
    * ✅ Retorno `false` cuando no existe token previo.
    * ✅ Persistencia correcta de token y datos de usuario en `SharedPreferences`.
@@ -76,7 +76,7 @@ El proyecto cuenta con una suite completa de pruebas unitarias implementadas con
 3. `test/calculadora_promedio_test.dart` y `test/widget_test.dart`:
    * ✅ Pruebas de lógica de cálculo ponderado y componentes visuales del proyecto base.
 
-### 💻 Comando para ejecutar las pruebas:
+### Comando para ejecutar las pruebas:
 ```bash
 cd proyecto_moviles2_grupo03
 flutter test
@@ -88,7 +88,7 @@ flutter test
 
 ---
 
-## 📁 Estructura del Código Fuente Afectado
+##  Estructura del Código Fuente Afectado
 
 ```
 proyecto_moviles2_grupo03/
@@ -108,7 +108,7 @@ proyecto_moviles2_grupo03/
 
 ---
 
-## 👨‍🏫 Guía de Defensa Oral ante el Docente
+##  Guía de Defensa Oral ante el Docente
 
 | Pregunta del Docente | Respuesta Recomendada |
 | :--- | :--- |
