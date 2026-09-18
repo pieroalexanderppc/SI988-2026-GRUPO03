@@ -67,6 +67,7 @@ class UsuarioModel {
         codigo: '0000000000',
         token: '',
         saldoCentimos: 0,
+        saldoExacto: '0.00',
         estado: 'INACTIVO',
         carrera: 'General',
         ciclo: 'I',
