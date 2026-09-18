@@ -3,8 +3,9 @@ import 'package:proyecto_moviles2_grupo03/main.dart';
 
 void main() {
   testWidgets('PromedioApp renderiza formulario con minimo 2 filas', (WidgetTester tester) async {
-    // Renderizar la aplicación PromedioApp
-    await tester.pumpWidget(const PromedioApp());
+    // Renderizar la aplicación PromedioApp con sesión iniciada
+    await tester.pumpWidget(const PromedioApp(estaAutenticado: true));
+    await tester.pumpAndSettle();
 
     // Verificar que se muestre el título en la AppBar
     expect(find.text('PromedioApp - Formulario'), findsOneWidget);
@@ -16,4 +17,13 @@ void main() {
     expect(find.text('Evaluación 1'), findsOneWidget);
     expect(find.text('Evaluación 2'), findsOneWidget);
   });
+
+  testWidgets('PromedioApp muestra LoginScreen si no esta autenticado', (WidgetTester tester) async {
+    await tester.pumpWidget(const PromedioApp(estaAutenticado: false));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Soluciones Móviles II'), findsOneWidget);
+    expect(find.text('Iniciar Sesión'), findsOneWidget);
+  });
 }
+
