@@ -9,7 +9,8 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProviderStateMixin {
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with SingleTickerProviderStateMixin {
   bool _isVisible = false;
 
   @override
@@ -44,43 +45,62 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Theme.of(context).colorScheme.primaryContainer,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer,
                       ),
                       child: Icon(
                         Icons.school_rounded,
                         size: 96,
                         color: Theme.of(context).colorScheme.primary,
-                        semanticLabel: 'Icono de graduación PromedioApp',
+                        semanticLabel:
+                            'Icono de graduación PromedioApp',
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 32),
+
                   Text(
                     'PromedioApp',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                    style:
+                        Theme.of(context).textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                   ),
+
                   const SizedBox(height: 16),
+
                   Text(
                     'Calcula y guarda tu historial académico de forma rápida y sencilla.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          height: 1.5,
-                        ),
+                    style:
+                        Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              height: 1.5,
+                            ),
                   ),
+
                   const SizedBox(height: 48),
+
                   FilledButton.icon(
                     onPressed: () {
                       Navigator.of(context).push(
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const AuthScreen(),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(opacity: animation, child: child);
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const AuthScreen(),
+                          transitionsBuilder: (context, animation,
+                              secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
                           },
                         ),
                       );
@@ -88,14 +108,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
                     icon: const Icon(Icons.login_rounded),
                     label: const Text('Iniciar sesión / Registrarme'),
                   ),
+
                   const SizedBox(height: 16),
+
                   OutlinedButton.icon(
                     onPressed: () {
                       Navigator.of(context).push(
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(opacity: animation, child: child);
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const HomeScreen(),
+                          transitionsBuilder: (context, animation,
+                              secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
                           },
                         ),
                       );

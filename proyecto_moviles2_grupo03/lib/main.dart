@@ -11,9 +11,11 @@ import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
   runApp(const PromedioApp());
 }
 
@@ -37,16 +39,19 @@ class PromedioApp extends StatelessWidget {
         home: StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
-            // Mientras se determina el estado, podramos mostrar un loader, pero authStateChanges es casi instantneo.
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
               );
             }
+
             if (snapshot.hasData && snapshot.data != null) {
-              return const HomeScreen(); // Usuario logueado
+              return const HomeScreen();
             }
-            return const WelcomeScreen(); // No hay usuario
+
+            return const WelcomeScreen();
           },
         ),
       ),
