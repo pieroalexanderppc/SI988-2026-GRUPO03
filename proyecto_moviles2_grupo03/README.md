@@ -18,3 +18,4 @@ samples, guidance on mobile development, and a full API reference.
 
 ## Historias de Usuario
 - [x] H05 (Issue #8): Registro e Inicio de sesión con Firebase Auth.
+- [x] H06 (Issue #9): Pantalla de bienvenida (login o sin cuenta).
