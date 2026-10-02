@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/componentes_provider.dart';
 import '../widgets/fila_componente.dart';
+import 'auth_screen.dart';
 
 /// Pantalla principal (HomeScreen) con el formulario dinámico de componentes de evaluación.
 class HomeScreen extends StatelessWidget {
@@ -13,6 +15,20 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('PromedioApp - Formulario'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+              }
+            },
+          ),
+        ],
       ),
       body: Consumer<ComponentesProvider>(
         builder: (context, provider, child) {
