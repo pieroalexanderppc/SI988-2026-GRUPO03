@@ -4,7 +4,11 @@ import '../utils/validators.dart';
 import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  /// Si es true, tras login exitoso hace pop() en vez de pushReplacement,
+  /// para volver al formulario con los datos intactos.
+  final bool modoVincular;
+
+  const AuthScreen({super.key, this.modoVincular = false});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -63,9 +67,13 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        if (widget.modoVincular) {
+          Navigator.of(context).pop(); // Volver al formulario con datos intactos
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
