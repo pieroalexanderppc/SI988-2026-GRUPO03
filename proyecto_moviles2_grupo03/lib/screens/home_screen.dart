@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/componentes_provider.dart';
 import '../widgets/fila_componente.dart';
+import '../services/calculadora_promedio.dart';
 import 'welcome_screen.dart';
 import 'auth_screen.dart';
 
@@ -54,14 +55,39 @@ class HomeScreen extends StatelessWidget {
           final componentes = provider.componentes;
           final sumaPesos = provider.sumaPesos;
           final esValida = provider.esSumaPesosValida;
+          final promedio = CalculadoraPromedio.calcularPromedio(componentes);
+          final String userName = user?.email?.split('@').first ?? '';
 
           return Column(
             children: [
+              // Saludo personalizado (Fase 2)
+              if (!esSinCuenta && userName.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Hola, $userName 👋',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                ),
               // Banner de modo sin cuenta
               if (esSinCuenta) _buildBannerSinCuenta(context),
 
               // Indicador visual del total de pesos
               _buildIndicadorPesos(context, sumaPesos, esValida),
+
+              // Tarjeta de resultado del promedio
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                child: promedio != null
+                    ? _buildTarjetaResultado(context, promedio)
+                    : const SizedBox.shrink(key: ValueKey('empty_promedio')),
+              ),
 
               // Lista dinámica de componentes de evaluación
               Expanded(
@@ -228,6 +254,77 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTarjetaResultado(BuildContext context, double promedio) {
+    final esAprobado = CalculadoraPromedio.esAprobado(promedio);
+    final color = esAprobado ? Colors.green.shade700 : Colors.red.shade700;
+    final icon = esAprobado ? Icons.emoji_events_rounded : Icons.sentiment_dissatisfied_rounded;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: esAprobado ? Colors.green.shade50 : Colors.red.shade50,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: color.withValues(alpha: 0.5), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 32),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Promedio Final',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: color.withValues(alpha: 0.8),
+                    ),
+                  ),
+                  Text(
+                    promedio.toStringAsFixed(2),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                esAprobado ? 'APROBADO' : 'DESAPROBADO',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

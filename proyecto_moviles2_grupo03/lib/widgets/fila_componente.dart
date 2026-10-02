@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../models/componente_evaluacion.dart';
 import '../providers/componentes_provider.dart';
 
-/// Widget reutilizable que representa una fila editable de un componente de evaluación.
 class FilaComponente extends StatefulWidget {
   final ComponenteEvaluacion componente;
   final bool puedeEliminar;
@@ -43,7 +42,6 @@ class _FilaComponenteState extends State<FilaComponente> {
   @override
   void didUpdateWidget(covariant FilaComponente oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Sincronizar controladores si el modelo cambia desde fuera (sin romper edición activa)
     if (oldWidget.componente.nombre != widget.componente.nombre &&
         _nombreController.text != widget.componente.nombre) {
       _nombreController.text = widget.componente.nombre;
@@ -63,24 +61,20 @@ class _FilaComponenteState extends State<FilaComponente> {
     final provider = Provider.of<ComponentesProvider>(context, listen: false);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             Row(
               children: [
-                // Campo para el nombre del componente (ej. Examen Parcial)
                 Expanded(
                   child: TextField(
                     controller: _nombreController,
                     decoration: const InputDecoration(
-                      labelText: 'Nombre del componente',
+                      labelText: 'Nombre de evaluación',
                       hintText: 'Ej. Examen Parcial',
-                      isDense: true,
-                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.assignment_outlined),
                     ),
                     onChanged: (val) {
                       provider.actualizarComponente(
@@ -91,10 +85,9 @@ class _FilaComponenteState extends State<FilaComponente> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Botón de eliminar fila con ícono de basura
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  color: Colors.red[700],
+                  color: Theme.of(context).colorScheme.error,
                   tooltip: widget.puedeEliminar
                       ? 'Eliminar componente'
                       : 'Mínimo 2 filas requeridas',
@@ -104,10 +97,9 @@ class _FilaComponenteState extends State<FilaComponente> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Row(
               children: [
-                // Campo numérico para la Nota (0 - 20)
                 Expanded(
                   child: TextField(
                     controller: _notaController,
@@ -115,19 +107,15 @@ class _FilaComponenteState extends State<FilaComponente> {
                       decimal: true,
                     ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d*'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
                     decoration: const InputDecoration(
-                      labelText: 'Nota (0 - 20)',
+                      labelText: 'Nota',
                       hintText: '0 - 20',
-                      isDense: true,
-                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.grading_rounded),
                     ),
                     onChanged: (val) {
                       final notaVal = double.tryParse(val) ?? 0.0;
-                      // Validar rango 0 a 20
                       final notaClamped = notaVal.clamp(0.0, 20.0);
                       provider.actualizarComponente(
                         widget.componente.id,
@@ -137,7 +125,6 @@ class _FilaComponenteState extends State<FilaComponente> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Campo numérico para el Peso % (0 - 100)
                 Expanded(
                   child: TextField(
                     controller: _pesoController,
@@ -145,20 +132,15 @@ class _FilaComponenteState extends State<FilaComponente> {
                       decimal: true,
                     ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d*'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
                     decoration: const InputDecoration(
-                      labelText: 'Peso (%)',
+                      labelText: 'Peso',
                       hintText: '0 - 100',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                      suffixText: '%',
+                      prefixIcon: Icon(Icons.percent_rounded),
                     ),
                     onChanged: (val) {
                       final pesoVal = double.tryParse(val) ?? 0.0;
-                      // Validar rango 0 a 100
                       final pesoClamped = pesoVal.clamp(0.0, 100.0);
                       provider.actualizarComponente(
                         widget.componente.id,

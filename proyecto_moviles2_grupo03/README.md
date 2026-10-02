@@ -21,3 +21,6 @@ samples, guidance on mobile development, and a full API reference.
 - [x] H06 (Issue #9): Pantalla de bienvenida (login o sin cuenta).
 - [x] H07 (Issue #10): Guardado de cálculos en Firestore.
 - [x] H08 (Issue #11): Modo sin cuenta (calculadora inmediata sin persistencia).
+
+## Mejoras
+- [x] Rediseño UI: Sistema de diseño centralizado con Material 3 (tema claro/oscuro), microinteracciones y tarjeta de resultado.
