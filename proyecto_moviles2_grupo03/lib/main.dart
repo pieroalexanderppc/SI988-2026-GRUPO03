@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'providers/componentes_provider.dart';
-import 'screens/home_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+import 'firebase_options.dart';
+import 'providers/componentes_provider.dart';
+import 'screens/welcome_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const PromedioApp());
 }
 
-/// Widget raíz de la aplicación PromedioApp.
 class PromedioApp extends StatelessWidget {
   const PromedioApp({super.key});
 
@@ -25,7 +33,7 @@ class PromedioApp extends StatelessWidget {
             brightness: Brightness.light,
           ),
         ),
-        home: const HomeScreen(),
+        home: const WelcomeScreen(),
       ),
     );
   }
