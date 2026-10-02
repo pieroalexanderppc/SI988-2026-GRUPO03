@@ -33,4 +33,22 @@ class ComponenteEvaluacion {
       peso: peso ?? this.peso,
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'nombre': nombre,
+      'nota': nota,
+      'peso': peso,
+    };
+  }
+
+  factory ComponenteEvaluacion.fromMap(Map<String, dynamic> map) {
+    return ComponenteEvaluacion(
+      id: map['id'] ?? '',
+      nombre: map['nombre'] ?? '',
+      nota: (map['nota'] ?? 0.0).toDouble(),
+      peso: (map['peso'] ?? 0.0).toDouble(),
+    );
+  }
 }
