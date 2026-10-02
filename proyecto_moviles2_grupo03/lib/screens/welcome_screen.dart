@@ -1,138 +1,139 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
+import 'auth_screen.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
 
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with SingleTickerProviderStateMixin {
+  bool _isVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _isVisible = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bienvenido'),
-        centerTitle: true,
-      ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.waving_hand,
-                size: 90,
+          padding: const EdgeInsets.all(32.0),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: AnimatedOpacity(
+              opacity: _isVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Hero(
+                    tag: 'app_icon',
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer,
+                      ),
+                      child: Icon(
+                        Icons.school_rounded,
+                        size: 96,
+                        color: Theme.of(context).colorScheme.primary,
+                        semanticLabel:
+                            'Icono de graduación PromedioApp',
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  Text(
+                    'PromedioApp',
+                    textAlign: TextAlign.center,
+                    style:
+                        Theme.of(context).textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Text(
+                    'Calcula y guarda tu historial académico de forma rápida y sencilla.',
+                    textAlign: TextAlign.center,
+                    style:
+                        Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                  ),
+
+                  const SizedBox(height: 48),
+
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const AuthScreen(),
+                          transitionsBuilder: (context, animation,
+                              secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.login_rounded),
+                    label: const Text('Iniciar sesión / Registrarme'),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const HomeScreen(),
+                          transitionsBuilder: (context, animation,
+                              secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: const Text('Continuar sin cuenta'),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 30),
-
-              Text(
-                user != null
-                    ? '¡Bienvenido de nuevo!'
-                    : '¡Bienvenido!',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 15),
-
-              if (user != null)
-                Text(
-                  user.email ?? 'Usuario',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge,
-                  textAlign: TextAlign.center,
-                ),
-
-              const SizedBox(height: 35),
-
-              if (user != null) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const HomeScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Continuar',
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                TextButton(
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-
-                    if (context.mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const WelcomeScreen(),
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text(
-                    'Cerrar sesión',
-                  ),
-                ),
-              ],
-
-              if (user == null) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const LoginScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Iniciar sesión / Crear cuenta',
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const HomeScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Continuar sin cuenta',
-                    ),
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),
