@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/componentes_provider.dart';
 import '../widgets/fila_componente.dart';
-import 'auth_screen.dart';
+import 'welcome_screen.dart';
 
 /// Pantalla principal (HomeScreen) con el formulario dinámico de componentes de evaluación.
 class HomeScreen extends StatelessWidget {
@@ -22,8 +22,9 @@ class HomeScreen extends StatelessWidget {
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
               if (context.mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                  (route) => false,
                 );
               }
             },

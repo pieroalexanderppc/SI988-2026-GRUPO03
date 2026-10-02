@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/componentes_provider.dart';
-import 'screens/auth_screen.dart';
+import 'screens/welcome_screen.dart';
+import 'screens/home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -32,7 +34,21 @@ class PromedioApp extends StatelessWidget {
             brightness: Brightness.light,
           ),
         ),
-        home: const AuthScreen(),
+        home: StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            // Mientras se determina el estado, podramos mostrar un loader, pero authStateChanges es casi instantneo.
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasData && snapshot.data != null) {
+              return const HomeScreen(); // Usuario logueado
+            }
+            return const WelcomeScreen(); // No hay usuario
+          },
+        ),
       ),
     );
   }
