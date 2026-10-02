@@ -4,10 +4,7 @@ import '../utils/validators.dart';
 import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
-  /// Si es true, tras login exitoso hace pop() en vez de pushReplacement,
-  /// para volver al formulario con los datos intactos.
   final bool modoVincular;
-
   const AuthScreen({super.key, this.modoVincular = false});
 
   @override
@@ -68,7 +65,7 @@ class _AuthScreenState extends State<AuthScreen> {
       
       if (mounted) {
         if (widget.modoVincular) {
-          Navigator.of(context).pop(); // Volver al formulario con datos intactos
+          Navigator.of(context).pop();
         } else {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -78,13 +75,19 @@ class _AuthScreenState extends State<AuthScreen> {
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_mapErrorMessage(e.code))),
+          SnackBar(
+            content: Text(_mapErrorMessage(e.code)),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error inesperado: $e')),
+          SnackBar(
+            content: Text('Error inesperado: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -98,71 +101,95 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_esRegistro ? 'Crear cuenta' : 'Iniciar sesión'),
+        title: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: Text(
+            _esRegistro ? 'Crear cuenta' : 'Iniciar sesión',
+            key: ValueKey<bool>(_esRegistro),
+          ),
+        ),
         centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.lock_outline,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 32),
-                TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Correo electrónico',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: Validators.email,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Contraseña',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: Validators.password,
-                ),
-                const SizedBox(height: 24),
-                if (_cargando)
-                  const CircularProgressIndicator()
-                else ...[
-                  FilledButton(
-                    onPressed: _submit,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
+          padding: const EdgeInsets.all(32.0),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Hero(
+                    tag: 'app_icon',
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                      ),
+                      child: Icon(
+                        Icons.school_rounded,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.primary,
+                        semanticLabel: 'Icono de seguridad',
+                      ),
                     ),
-                    child: Text(_esRegistro ? 'Registrarse' : 'Ingresar'),
+                  ),
+                  const SizedBox(height: 48),
+                  TextFormField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Correo electrónico',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    validator: Validators.email,
                   ),
                   const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _esRegistro = !_esRegistro;
-                        _formKey.currentState?.reset();
-                      });
-                    },
-                    child: Text(
-                      _esRegistro
-                          ? '¿Ya tienes cuenta? Inicia sesión'
-                          : '¿No tienes cuenta? Regístrate',
+                  TextFormField(
+                    controller: _passCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Contraseña',
+                      prefixIcon: Icon(Icons.lock_outline),
                     ),
+                    validator: Validators.password,
+                  ),
+                  const SizedBox(height: 32),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _cargando
+                        ? const CircularProgressIndicator()
+                        : Column(
+                            key: const ValueKey('buttons'),
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              FilledButton(
+                                onPressed: _submit,
+                                child: Text(_esRegistro ? 'Registrarse' : 'Ingresar'),
+                              ),
+                              const SizedBox(height: 16),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _esRegistro = !_esRegistro;
+                                    _formKey.currentState?.reset();
+                                  });
+                                },
+                                child: Text(
+                                  _esRegistro
+                                      ? '¿Ya tienes cuenta? Inicia sesión'
+                                      : '¿No tienes cuenta? Regístrate',
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
