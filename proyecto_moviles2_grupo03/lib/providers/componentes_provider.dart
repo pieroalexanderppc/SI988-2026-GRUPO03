@@ -57,12 +57,7 @@ class ComponentesProvider extends ChangeNotifier {
   /// Añade una nueva fila vacía a la lista de componentes.
   void agregarComponente() {
     _componentes.add(
-      ComponenteEvaluacion(
-        id: _generarId(),
-        nombre: '',
-        nota: 0.0,
-        peso: 0.0,
-      ),
+      ComponenteEvaluacion(id: _generarId(), nombre: '', nota: 0.0, peso: 0.0),
     );
     notifyListeners();
   }

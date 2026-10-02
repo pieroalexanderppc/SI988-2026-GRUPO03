@@ -115,9 +115,7 @@ class _FilaComponenteState extends State<FilaComponente> {
                       decimal: true,
                     ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d*'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
                     decoration: const InputDecoration(
                       labelText: 'Nota (0 - 20)',
@@ -145,9 +143,7 @@ class _FilaComponenteState extends State<FilaComponente> {
                       decimal: true,
                     ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d*'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
                     decoration: const InputDecoration(
                       labelText: 'Peso (%)',

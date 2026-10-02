@@ -1,4 +1,3 @@
-
 class CalculadoraPromedio {
   /// Valida que existan al menos 2 componentes
   static bool tieneComponentesSuficientes(List componentes) {
