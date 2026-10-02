@@ -17,6 +17,8 @@ void main() async {
 }
 
 /// Widget raíz de la aplicación PromedioApp.
+final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 class PromedioApp extends StatelessWidget {
   const PromedioApp({super.key});
 
@@ -25,6 +27,7 @@ class PromedioApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => ComponentesProvider(),
       child: MaterialApp(
+        scaffoldMessengerKey: scaffoldMessengerKey,
         title: 'PromedioApp',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
