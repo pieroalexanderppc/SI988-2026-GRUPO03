@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/componentes_provider.dart';
 import '../widgets/fila_componente.dart';
 import 'welcome_screen.dart';
+import 'auth_screen.dart';
 
 /// Pantalla principal (HomeScreen) con el formulario dinámico de componentes de evaluación.
 class HomeScreen extends StatelessWidget {
@@ -11,24 +12,41 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    User? user;
+    try {
+      user = FirebaseAuth.instance.currentUser;
+    } catch (e) {
+      user = null;
+    }
+    final esSinCuenta = user == null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('PromedioApp - Formulario'),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar sesión',
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-                  (route) => false,
-                );
-              }
-            },
-          ),
+          if (!esSinCuenta)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Cerrar sesión',
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+            ),
+          if (esSinCuenta)
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Volver',
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
         ],
       ),
       body: Consumer<ComponentesProvider>(
@@ -39,6 +57,9 @@ class HomeScreen extends StatelessWidget {
 
           return Column(
             children: [
+              // Banner de modo sin cuenta
+              if (esSinCuenta) _buildBannerSinCuenta(context),
+
               // Indicador visual del total de pesos
               _buildIndicadorPesos(context, sumaPesos, esValida),
 
@@ -81,6 +102,75 @@ class HomeScreen extends StatelessWidget {
             },
           ),
         ),
+      ),
+    );
+  }
+
+  /// Banner visible solo en modo sin cuenta (Criterio 3 y 4 de H08).
+  Widget _buildBannerSinCuenta(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.amber.shade400,
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.amber.shade800,
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Modo sin cuenta',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tus datos no se guardarán al cerrar la app.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AuthScreen(modoVincular: true),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Crear cuenta para guardar mis datos',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
