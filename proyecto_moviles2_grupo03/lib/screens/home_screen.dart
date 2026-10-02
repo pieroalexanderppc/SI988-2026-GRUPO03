@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/componentes_provider.dart';
 import '../widgets/fila_componente.dart';
 
+import 'ciclos_screen.dart';
+
 /// Pantalla principal (HomeScreen) con el formulario dinámico de componentes de evaluación.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -13,6 +15,18 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('PromedioApp - Formulario'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.folder),
+            tooltip: 'Mis Ciclos',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CiclosScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: Consumer<ComponentesProvider>(
         builder: (context, provider, child) {
@@ -22,6 +36,59 @@ class HomeScreen extends StatelessWidget {
 
           return Column(
             children: [
+              // Aviso de Modo Sin Cuenta (Guest Mode)
+              Container(
+                width: double.infinity,
+                color: Colors.amber.shade100,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.amber.shade900),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Modo sin cuenta: Los datos no se guardarán y se perderán al salir.',
+                            style: TextStyle(
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          // TODO: Navegar a pantalla de registro (Issue futuro)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Navegando a Crear Cuenta...'),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.person_add, size: 18),
+                        label: const Text('Crear una cuenta'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.amber.shade900,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // Indicador visual del total de pesos
               _buildIndicadorPesos(context, sumaPesos, esValida),
 
@@ -70,7 +137,10 @@ class HomeScreen extends StatelessWidget {
 
   /// Widget de banner/indicador visual para la suma de pesos.
   Widget _buildIndicadorPesos(
-      BuildContext context, double sumaPesos, bool esValida) {
+    BuildContext context,
+    double sumaPesos,
+    bool esValida,
+  ) {
     final colorFondo = esValida ? Colors.green.shade100 : Colors.red.shade100;
     final colorTexto = esValida ? Colors.green.shade900 : Colors.red.shade900;
     final colorIcono = esValida ? Colors.green.shade700 : Colors.red.shade700;
@@ -112,10 +182,7 @@ class HomeScreen extends StatelessWidget {
                   esValida
                       ? '¡La suma de pesos es correcta (100%)!'
                       : 'La suma de pesos debe dar 100% (tolerancia ±0.1%)',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorTexto,
-                  ),
+                  style: TextStyle(fontSize: 13, color: colorTexto),
                 ),
               ],
             ),
