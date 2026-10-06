@@ -12,6 +12,7 @@ import '../widgets/linea_pesos.dart';
 import '../services/calculadora_promedio.dart';
 import 'welcome_screen.dart';
 import 'auth_screen.dart';
+import 'ciclos_screen.dart';
 
 /// Pantalla principal: calculadora rapida de promedio ponderado
 /// (DESIGN.md pantalla 10). Sirve tanto con cuenta como sin cuenta.
@@ -65,6 +66,16 @@ class HomeScreen extends StatelessWidget {
               titulo: 'Calculadora rápida',
               mostrarAtras: false,
               acciones: [
+                // H10 - Acceso a gestion de ciclos
+                IconButton(
+                  icon: const Icon(Icons.school_rounded),
+                  tooltip: 'Mis ciclos',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CiclosScreen()),
+                    );
+                  },
+                ),
                 reiniciar,
                 IconButton(
                   icon: const Icon(Icons.logout_rounded),
