@@ -1,442 +1,236 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../providers/componentes_provider.dart';
+import '../widgets/app_bar_nivel.dart';
+import '../widgets/banner_sin_cuenta.dart';
+import '../widgets/borde_punteado.dart';
+import '../widgets/card_resultado.dart';
+import '../widgets/cta_crear_cuenta.dart';
 import '../widgets/fila_componente.dart';
+import '../widgets/linea_pesos.dart';
 import '../services/calculadora_promedio.dart';
-
 import 'welcome_screen.dart';
 import 'auth_screen.dart';
 import 'ciclos_screen.dart';
 
-/// Pantalla principal (HomeScreen) con el formulario dinámico
-/// de componentes de evaluación.
+/// Pantalla principal: calculadora rapida de promedio ponderado
+/// (DESIGN.md pantalla 10). Sirve tanto con cuenta como sin cuenta.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  Future<void> _confirmarReinicio(BuildContext context) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Reiniciar la calculadora?'),
+        content: const Text('Se borrarán los componentes actuales y volverás a 2 filas vacías.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Reiniciar')),
+        ],
+      ),
+    );
+    if (confirmar == true && context.mounted) {
+      context.read<ComponentesProvider>().reiniciar();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     User? user;
-
     try {
       user = FirebaseAuth.instance.currentUser;
     } catch (e) {
       user = null;
     }
+    // Una cuenta sin verificar se trata como modo sin cuenta.
+    final esSinCuenta = user == null || !user.emailVerified;
+    final String userName = user?.email?.split('@').first ?? '';
 
-    final esSinCuenta = user == null;
+    final reiniciar = IconButton(
+      icon: const Icon(Icons.restart_alt_rounded),
+      tooltip: 'Reiniciar calculadora',
+      onPressed: () => _confirmarReinicio(context),
+    );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('PromedioApp - Formulario'),
-        centerTitle: true,
-        actions: [
-          // H10 - Acceso a gestión de ciclos
-          if (!esSinCuenta)
-            IconButton(
-              icon: const Icon(Icons.calendar_month),
-              tooltip: 'Mis ciclos',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CiclosScreen(),
-                  ),
-                );
-              },
-            ),
-
-          // Cerrar sesión
-          if (!esSinCuenta)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Cerrar sesión',
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-
-                if (context.mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) => const WelcomeScreen(),
-                    ),
-                    (route) => false,
-                  );
-                }
-              },
-            ),
-
-          // Volver cuando está en modo sin cuenta
-          if (esSinCuenta)
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Volver',
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-        ],
-      ),
-
-      body: Consumer<ComponentesProvider>(
-        builder: (context, provider, child) {
-          final componentes = provider.componentes;
-          final sumaPesos = provider.sumaPesos;
-          final esValida = provider.esSumaPesosValida;
-          final promedio =
-              CalculadoraPromedio.calcularPromedio(componentes);
-
-          final String userName =
-              user?.email?.split('@').first ?? '';
-
-          return Column(
-            children: [
-              // Saludo personalizado
-              if (!esSinCuenta && userName.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    16,
-                    16,
-                    16,
-                    0,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Hola, $userName 👋',
-                      style:
-                          Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                    ),
-                  ),
-                ),
-
-              // Banner de modo sin cuenta
-              if (esSinCuenta)
-                _buildBannerSinCuenta(context),
-
-              // Indicador visual del total de pesos
-              _buildIndicadorPesos(
-                context,
-                sumaPesos,
-                esValida,
-              ),
-
-              // Tarjeta de resultado del promedio
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                transitionBuilder: (child, animation) {
-                  return ScaleTransition(
-                    scale: animation,
-                    child: child,
-                  );
-                },
-                child: promedio != null
-                    ? _buildTarjetaResultado(
-                        context,
-                        promedio,
-                      )
-                    : const SizedBox.shrink(
-                        key: ValueKey('empty_promedio'),
-                      ),
-              ),
-
-              // Lista dinámica de componentes de evaluación
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(
-                    top: 8,
-                    bottom: 80,
-                  ),
-                  itemCount: componentes.length,
-                  itemBuilder: (context, index) {
-                    final item = componentes[index];
-
-                    return FilaComponente(
-                      key: ValueKey(item.id),
-                      componente: item,
-                      puedeEliminar: provider.puedeEliminar,
+      appBar: esSinCuenta
+          ? AppBarNivel(
+              padre: 'Modo sin cuenta',
+              titulo: 'Calculadora rápida',
+              acciones: [reiniciar],
+            )
+          : AppBarNivel(
+              padre: userName.isNotEmpty ? 'Hola, $userName' : 'Tu cuenta',
+              titulo: 'Calculadora rápida',
+              mostrarAtras: false,
+              acciones: [
+                // H10 - Acceso a gestion de ciclos
+                IconButton(
+                  icon: const Icon(Icons.school_rounded),
+                  tooltip: 'Mis ciclos',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CiclosScreen()),
                     );
                   },
                 ),
+                reiniciar,
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded),
+                  tooltip: 'Cerrar sesión',
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+      body: Consumer<ComponentesProvider>(
+        builder: (context, provider, child) {
+          final componentes = provider.componentes;
+          final promedio = CalculadoraPromedio.calcularPromedio(componentes);
+
+          // Si no hay promedio, se explica por que (sin tocar la logica de H02).
+          String textoSinNota = 'Sin notas aún';
+          String? subtituloSinNota;
+          if (promedio == null) {
+            if (!provider.esSumaPesosValida) {
+              textoSinNota = 'Completa los pesos';
+              subtituloSinNota = 'Deben sumar 100% para calcular';
+            } else {
+              textoSinNota = 'Revisa los datos';
+              subtituloSinNota = 'Notas de 0 a 20 y pesos mayores a 0';
+            }
+          }
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+            children: [
+              if (esSinCuenta) ...[
+                const BannerSinCuenta(),
+                const SizedBox(height: 12),
+              ],
+              CardResultado(
+                nota: promedio,
+                titulo: 'Promedio final',
+                subtitulo: promedio == null ? subtituloSinNota : null,
+                textoSinNota: textoSinNota,
               ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: LineaPesos(suma: provider.sumaPesos),
+              ),
+              const SizedBox(height: 16),
+              const _EncabezadoTabla(),
+              const SizedBox(height: 8),
+              for (final item in componentes) ...[
+                FilaComponente(
+                  key: ValueKey(item.id),
+                  componente: item,
+                  puedeEliminar: provider.puedeEliminar,
+                ),
+                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 4),
+              _BotonAgregar(onPressed: provider.agregarComponente),
             ],
           );
         },
       ),
-
-      // Botón para agregar nuevos componentes
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Consumer<ComponentesProvider>(
-            builder: (context, provider, child) {
-              return FilledButton.icon(
-                onPressed: () {
-                  provider.agregarComponente();
+      bottomNavigationBar: esSinCuenta
+          ? Consumer<ComponentesProvider>(
+              builder: (context, provider, child) => CtaCrearCuenta(
+                cantidadComponentes: provider.componentes.length,
+                onCrearCuenta: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AuthScreen(modoVincular: true),
+                    ),
+                  );
                 },
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar componente'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
+              ),
+            )
+          : null,
     );
   }
+}
 
-  /// Banner visible solo en modo sin cuenta.
-  Widget _buildBannerSinCuenta(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade100,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.amber.shade400,
-          width: 1.5,
-        ),
-      ),
+class _EncabezadoTabla extends StatelessWidget {
+  const _EncabezadoTabla();
+
+  @override
+  Widget build(BuildContext context) {
+    final estilo = TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    return ExcludeSemantics(
       child: Row(
         children: [
-          Icon(
-            Icons.info_outline,
-            color: Colors.amber.shade800,
-            size: 28,
-          ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Modo sin cuenta',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.amber.shade900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Tus datos no se guardarán al cerrar la app.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.amber.shade900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const AuthScreen(
-                          modoVincular: true,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    'Crear cuenta para guardar mis datos',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.indigo.shade700,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text('Componente', style: estilo),
             ),
           ),
+          const SizedBox(width: ColumnasComponente.separacion),
+          SizedBox(
+            width: ColumnasComponente.nota,
+            child: Text('Nota', textAlign: TextAlign.center, style: estilo),
+          ),
+          const SizedBox(width: ColumnasComponente.separacion),
+          SizedBox(
+            width: ColumnasComponente.peso,
+            child: Text('Peso %', textAlign: TextAlign.center, style: estilo),
+          ),
+          const SizedBox(width: ColumnasComponente.borrar + 8),
         ],
       ),
     );
   }
+}
 
-  /// Indicador visual para la suma de pesos.
-  Widget _buildIndicadorPesos(
-    BuildContext context,
-    double sumaPesos,
-    bool esValida,
-  ) {
-    final colorFondo =
-        esValida ? Colors.green.shade100 : Colors.red.shade100;
+/// Boton punteado "+ Agregar componente" al final de la lista.
+class _BotonAgregar extends StatelessWidget {
+  final VoidCallback onPressed;
 
-    final colorTexto =
-        esValida ? Colors.green.shade900 : Colors.red.shade900;
+  const _BotonAgregar({required this.onPressed});
 
-    final colorIcono =
-        esValida ? Colors.green.shade700 : Colors.red.shade700;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: colorFondo,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: esValida
-              ? Colors.green.shade400
-              : Colors.red.shade400,
-          width: 1.5,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            esValida
-                ? Icons.check_circle_outline
-                : Icons.warning_amber_rounded,
-            color: colorIcono,
-            size: 28,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Suma total de pesos: '
-                  '${sumaPesos.toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: colorTexto,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  esValida
-                      ? '¡La suma de pesos es correcta (100%)!'
-                      : 'La suma de pesos debe dar 100% '
-                          '(tolerancia ±0.1%)',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorTexto,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTarjetaResultado(
-    BuildContext context,
-    double promedio,
-  ) {
-    final esAprobado =
-        CalculadoraPromedio.esAprobado(promedio);
-
-    final color = esAprobado
-        ? Colors.green.shade700
-        : Colors.red.shade700;
-
-    final icon = esAprobado
-        ? Icons.emoji_events_rounded
-        : Icons.sentiment_dissatisfied_rounded;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
-      color: esAprobado
-          ? Colors.green.shade50
-          : Colors.red.shade50,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return BordePunteado(
+      color: scheme.primary.withValues(alpha: 0.5),
+      radio: 16,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: color.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 32,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Promedio Final',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: color.withValues(alpha: 0.8),
-                    ),
-                  ),
-                  Text(
-                    promedio.toStringAsFixed(2),
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                      color: color,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                esAprobado ? 'APROBADO' : 'DESAPROBADO',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onPressed,
+          child: SizedBox(
+            height: 52,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_rounded, color: scheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Agregar componente',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: scheme.primary),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
