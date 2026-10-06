@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'providers/componentes_provider.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/verificar_correo_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'theme/app_theme.dart';
 
@@ -29,7 +30,7 @@ class PromedioApp extends StatelessWidget {
       create: (context) => ComponentesProvider(),
       child: MaterialApp(
         scaffoldMessengerKey: scaffoldMessengerKey,
-        title: 'PromedioApp',
+        title: 'Pondera',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
@@ -43,8 +44,13 @@ class PromedioApp extends StatelessWidget {
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-            if (snapshot.hasData && snapshot.data != null) {
-              return const HomeScreen(); // Usuario logueado
+            final user = snapshot.data;
+            if (user != null) {
+              // La cuenta solo entra si confirmo su correo.
+              if (!user.emailVerified) {
+                return const VerificarCorreoScreen();
+              }
+              return const HomeScreen(); // Usuario logueado y verificado
             }
             return const WelcomeScreen(); // No hay usuario
           },
