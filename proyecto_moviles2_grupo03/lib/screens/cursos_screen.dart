@@ -1,12 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../models/ciclo.dart';
-import '../services/ciclos_service.dart';
-import 'cursos_screen.dart';
+import '../models/curso.dart';
+import '../services/cursos_service.dart';
 
-class CiclosScreen extends StatelessWidget {
-  const CiclosScreen({super.key});
+class CursosScreen extends StatelessWidget {
+  final String cicloId;
+  final String cicloNombre;
+
+  const CursosScreen({
+    super.key,
+    required this.cicloId,
+    required this.cicloNombre,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -15,32 +21,24 @@ class CiclosScreen extends StatelessWidget {
     if (user == null) {
       return const Scaffold(
         body: Center(
-          child: Text(
-            'Debes iniciar sesión para gestionar tus ciclos.',
-          ),
+          child: Text('Debes iniciar sesión.'),
         ),
       );
     }
 
-    final ciclosService = CiclosService();
+    final service = CursosService();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis ciclos'),
+        title: Text('Cursos - $cicloNombre'),
         centerTitle: true,
       ),
-      body: StreamBuilder<List<Ciclo>>(
-        stream: ciclosService.obtenerCiclos(user.uid),
+      body: StreamBuilder<List<Curso>>(
+        stream: service.obtenerCursos(user.uid, cicloId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No se pudieron cargar los ciclos.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+              child: Text('No se pudieron cargar los cursos.'),
             );
           }
 
@@ -50,66 +48,68 @@ class CiclosScreen extends StatelessWidget {
             );
           }
 
-          final ciclos = snapshot.data ?? [];
+          final cursos = snapshot.data ?? [];
 
-          if (ciclos.isEmpty) {
+          if (cursos.isEmpty) {
             return _EstadoVacio(
-              onCrear: () => _mostrarDialogoCrear(
+              onCrear: () => _mostrarDialogoCurso(
                 context,
-                ciclosService,
+                service,
                 user.uid,
+                cicloId,
               ),
             );
           }
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: ciclos.length,
+            itemCount: cursos.length,
             itemBuilder: (context, index) {
-              final ciclo = ciclos[index];
+              final curso = cursos[index];
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  // Al tocar el ciclo se muestran sus cursos
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CursosScreen(
-                          cicloId: ciclo.id,
-                          cicloNombre: ciclo.nombre,
-                        ),
-                      ),
-                    );
-                  },
-
                   leading: const CircleAvatar(
-                    child: Icon(Icons.calendar_month),
+                    child: Icon(Icons.book),
                   ),
-
                   title: Text(
-                    ciclo.nombre,
+                    curso.nombre,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (opcion) {
+                      if (opcion == 'editar') {
+                        _mostrarDialogoCurso(
+                          context,
+                          service,
+                          user.uid,
+                          cicloId,
+                          curso: curso,
+                        );
+                      }
 
-                  subtitle: ciclo.fechaInicio != null
-                      ? Text(
-                          'Creado: ${_formatearFecha(ciclo.fechaInicio!)}',
-                        )
-                      : null,
-
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Eliminar ciclo',
-                    onPressed: () => _confirmarEliminar(
-                      context,
-                      ciclosService,
-                      user.uid,
-                      ciclo,
-                    ),
+                      if (opcion == 'eliminar') {
+                        _confirmarEliminar(
+                          context,
+                          service,
+                          user.uid,
+                          curso,
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'editar',
+                        child: Text('Editar'),
+                      ),
+                      PopupMenuItem(
+                        value: 'eliminar',
+                        child: Text('Eliminar'),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -117,54 +117,54 @@ class CiclosScreen extends StatelessWidget {
           );
         },
       ),
-
-      // Botón para crear ciclo
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _mostrarDialogoCrear(
+        onPressed: () => _mostrarDialogoCurso(
           context,
-          ciclosService,
+          service,
           user.uid,
+          cicloId,
         ),
         icon: const Icon(Icons.add),
-        label: const Text('Nuevo ciclo'),
+        label: const Text('Nuevo curso'),
       ),
     );
   }
 
-  // ============================
-  // CREAR CICLO
-  // ============================
-
-  static Future<void> _mostrarDialogoCrear(
+  static Future<void> _mostrarDialogoCurso(
     BuildContext context,
-    CiclosService service,
+    CursosService service,
     String uid,
-  ) async {
-    final controlador = TextEditingController();
+    String cicloId, {
+    Curso? curso,
+  }) async {
+    final controlador = TextEditingController(
+      text: curso?.nombre ?? '',
+    );
+
+    final editar = curso != null;
 
     await showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Crear ciclo'),
-
+          title: Text(
+            editar ? 'Editar curso' : 'Crear curso',
+          ),
           content: TextField(
             controller: controlador,
             autofocus: true,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
-              labelText: 'Nombre del ciclo',
-              hintText: 'Ejemplo: 2026-I',
+              labelText: 'Nombre del curso',
+              hintText: 'Ejemplo: Programación',
               border: OutlineInputBorder(),
             ),
           ),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancelar'),
             ),
-
             FilledButton(
               onPressed: () async {
                 final nombre = controlador.text.trim();
@@ -173,7 +173,7 @@ class CiclosScreen extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'Ingresa el nombre del ciclo.',
+                        'Ingresa el nombre del curso.',
                       ),
                     ),
                   );
@@ -181,10 +181,19 @@ class CiclosScreen extends StatelessWidget {
                 }
 
                 try {
-                  await service.crearCiclo(
-                    uid,
-                    nombre,
-                  );
+                  if (editar) {
+                    await service.actualizarCurso(
+                      uid,
+                      curso,
+                      nombre,
+                    );
+                  } else {
+                    await service.crearCurso(
+                      uid,
+                      cicloId,
+                      nombre,
+                    );
+                  }
 
                   if (dialogContext.mounted) {
                     Navigator.pop(dialogContext);
@@ -192,9 +201,11 @@ class CiclosScreen extends StatelessWidget {
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Ciclo creado correctamente.',
+                          editar
+                              ? 'Curso actualizado correctamente.'
+                              : 'Curso creado correctamente.',
                         ),
                       ),
                     );
@@ -204,14 +215,16 @@ class CiclosScreen extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
-                          'No se pudo crear el ciclo.',
+                          'No se pudo guardar el curso.',
                         ),
                       ),
                     );
                   }
                 }
               },
-              child: const Text('Crear'),
+              child: Text(
+                editar ? 'Guardar' : 'Crear',
+              ),
             ),
           ],
         );
@@ -221,27 +234,20 @@ class CiclosScreen extends StatelessWidget {
     controlador.dispose();
   }
 
-  // ============================
-  // ELIMINAR CICLO
-  // ============================
-
   static Future<void> _confirmarEliminar(
     BuildContext context,
-    CiclosService service,
+    CursosService service,
     String uid,
-    Ciclo ciclo,
+    Curso curso,
   ) async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Eliminar ciclo'),
-
+          title: const Text('Eliminar curso'),
           content: Text(
-            '¿Deseas eliminar el ciclo "${ciclo.nombre}"?\n\n'
-            'También se eliminarán los cursos asociados a este ciclo.',
+            '¿Deseas eliminar el curso "${curso.nombre}"?',
           ),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(
@@ -250,7 +256,6 @@ class CiclosScreen extends StatelessWidget {
               ),
               child: const Text('Cancelar'),
             ),
-
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red,
@@ -269,16 +274,16 @@ class CiclosScreen extends StatelessWidget {
     if (confirmar != true) return;
 
     try {
-      await service.eliminarCiclo(
+      await service.eliminarCurso(
         uid,
-        ciclo.id,
+        curso.id,
       );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Ciclo eliminado correctamente.',
+              'Curso eliminado correctamente.',
             ),
           ),
         );
@@ -288,28 +293,14 @@ class CiclosScreen extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'No se pudo eliminar el ciclo.',
+              'No se pudo eliminar el curso.',
             ),
           ),
         );
       }
     }
   }
-
-  // ============================
-  // FORMATEAR FECHA
-  // ============================
-
-  static String _formatearFecha(DateTime fecha) {
-    return '${fecha.day.toString().padLeft(2, '0')}/'
-        '${fecha.month.toString().padLeft(2, '0')}/'
-        '${fecha.year}';
-  }
 }
-
-// ========================================
-// ESTADO CUANDO NO HAY CICLOS
-// ========================================
 
 class _EstadoVacio extends StatelessWidget {
   final VoidCallback onCrear;
@@ -323,20 +314,17 @@ class _EstadoVacio extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.calendar_month_outlined,
+              Icons.book_outlined,
               size: 80,
               color: Theme.of(context).colorScheme.primary,
             ),
-
             const SizedBox(height: 20),
-
             Text(
-              'No tienes ciclos creados',
+              'No tienes cursos creados',
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme
@@ -345,23 +333,17 @@ class _EstadoVacio extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
             ),
-
             const SizedBox(height: 10),
-
-            Text(
-              'Crea tu primer ciclo académico para comenzar '
-              'a organizar tus cursos.',
+            const Text(
+              'Agrega los cursos correspondientes a este ciclo.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
             ),
-
             const SizedBox(height: 24),
-
             FilledButton.icon(
               onPressed: onCrear,
               icon: const Icon(Icons.add),
               label: const Text(
-                'Crear mi primer ciclo',
+                'Crear mi primer curso',
               ),
             ),
           ],
