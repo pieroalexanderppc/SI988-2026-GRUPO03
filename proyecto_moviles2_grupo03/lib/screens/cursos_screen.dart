@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/curso.dart';
 import '../services/cursos_service.dart';
+import 'unidades_screen.dart';
 
 class CursosScreen extends StatelessWidget {
   final String cicloId;
@@ -79,6 +80,23 @@ class CursosScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  subtitle: const Text(
+                    'Toca para gestionar sus unidades',
+                  ),
+
+                  // Abre H12 al tocar el curso.
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => UnidadesScreen(
+                          cursoId: curso.id,
+                          cursoNombre: curso.nombre,
+                        ),
+                      ),
+                    );
+                  },
+
                   trailing: PopupMenuButton<String>(
                     onSelected: (opcion) {
                       if (opcion == 'editar') {
@@ -89,9 +107,7 @@ class CursosScreen extends StatelessWidget {
                           cicloId,
                           curso: curso,
                         );
-                      }
-
-                      if (opcion == 'eliminar') {
+                      } else if (opcion == 'eliminar') {
                         _confirmarEliminar(
                           context,
                           service,
@@ -103,11 +119,23 @@ class CursosScreen extends StatelessWidget {
                     itemBuilder: (context) => const [
                       PopupMenuItem(
                         value: 'editar',
-                        child: Text('Editar'),
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined),
+                            SizedBox(width: 8),
+                            Text('Editar'),
+                          ],
+                        ),
                       ),
                       PopupMenuItem(
                         value: 'eliminar',
-                        child: Text('Eliminar'),
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline),
+                            SizedBox(width: 8),
+                            Text('Eliminar'),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -143,10 +171,10 @@ class CursosScreen extends StatelessWidget {
 
     final editar = curso != null;
 
-    await showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
           title: Text(
             editar ? 'Editar curso' : 'Crear curso',
           ),
@@ -222,16 +250,14 @@ class CursosScreen extends StatelessWidget {
                   }
                 }
               },
-              child: Text(
-                editar ? 'Guardar' : 'Crear',
-              ),
+              child: Text(editar ? 'Guardar' : 'Crear'),
             ),
           ],
-        );
-      },
-    );
-
-    controlador.dispose();
+        ),
+      );
+    } finally {
+      controlador.dispose();
+    }
   }
 
   static Future<void> _confirmarEliminar(
@@ -242,33 +268,31 @@ class CursosScreen extends StatelessWidget {
   ) async {
     final confirmar = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Eliminar curso'),
-          content: Text(
-            '¿Deseas eliminar el curso "${curso.nombre}"?',
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar curso'),
+        content: Text(
+          '¿Deseas eliminar el curso "${curso.nombre}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              false,
+            ),
+            child: const Text('Cancelar'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                false,
-              ),
-              child: const Text('Cancelar'),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
             ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                true,
-              ),
-              child: const Text('Eliminar'),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              true,
             ),
-          ],
-        );
-      },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
     );
 
     if (confirmar != true) return;
@@ -282,9 +306,7 @@ class CursosScreen extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Curso eliminado correctamente.',
-            ),
+            content: Text('Curso eliminado correctamente.'),
           ),
         );
       }
@@ -292,9 +314,7 @@ class CursosScreen extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'No se pudo eliminar el curso.',
-            ),
+            content: Text('No se pudo eliminar el curso.'),
           ),
         );
       }
@@ -342,13 +362,12 @@ class _EstadoVacio extends StatelessWidget {
             FilledButton.icon(
               onPressed: onCrear,
               icon: const Icon(Icons.add),
-              label: const Text(
-                'Crear mi primer curso',
-              ),
+              label: const Text('Crear mi primer curso'),
             ),
           ],
         ),
       ),
-    );
+         );
   }
 }
+
