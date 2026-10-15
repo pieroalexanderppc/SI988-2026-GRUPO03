@@ -2,10 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/unidad.dart';
+import '../services/calculo_curso_service.dart';
+import '../services/calculos_multinivel.dart';
 import '../services/unidades_service.dart';
 import 'tipos_evaluacion_screen.dart';
 
-class UnidadesScreen extends StatelessWidget {
+class UnidadesScreen extends StatefulWidget {
   final String cursoId;
   final String cursoNombre;
 
@@ -14,6 +16,49 @@ class UnidadesScreen extends StatelessWidget {
     required this.cursoId,
     required this.cursoNombre,
   });
+
+  @override
+  State<UnidadesScreen> createState() => _UnidadesScreenState();
+}
+
+class _UnidadesScreenState extends State<UnidadesScreen> {
+  final UnidadesService _service = UnidadesService();
+  final CalculoCursoService _calculoService = CalculoCursoService();
+
+  ResultadoCalculoCurso? _resultadoCalculo;
+  bool _cargandoCalculo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _actualizarCalculo();
+  }
+
+  Future<void> _actualizarCalculo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (mounted) {
+      setState(() => _cargandoCalculo = true);
+    }
+
+    try {
+      final resultado = await _calculoService.obtenerCalculoCurso(
+        user.uid,
+        widget.cursoId,
+      );
+      if (mounted) {
+        setState(() {
+          _resultadoCalculo = resultado;
+          _cargandoCalculo = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _cargandoCalculo = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,15 +70,26 @@ class UnidadesScreen extends StatelessWidget {
       );
     }
 
-    final service = UnidadesService();
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Unidades - $cursoNombre'),
+        title: Text('Unidades - ${widget.cursoNombre}'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: _cargandoCalculo
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            tooltip: 'Recalcular promedio',
+            onPressed: _cargandoCalculo ? null : _actualizarCalculo,
+          ),
+        ],
       ),
       body: StreamBuilder<List<Unidad>>(
-        stream: service.obtenerUnidades(user.uid, cursoId),
+        stream: _service.obtenerUnidades(user.uid, widget.cursoId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(
@@ -52,111 +108,170 @@ class UnidadesScreen extends StatelessWidget {
             (suma, unidad) => suma + unidad.porcentaje,
           );
 
-          final valido = unidades.isNotEmpty &&
-              (total - 100).abs() <= 0.1;
+          final valido = unidades.isNotEmpty && (total - 100).abs() <= 0.1;
 
-          return Column(
-            children: [
-              Card(
-                margin: const EdgeInsets.all(16),
-                child: ListTile(
-                  leading: Icon(
-                    valido ? Icons.check_circle : Icons.warning,
-                    color: valido ? Colors.green : Colors.red,
-                  ),
-                  title: Text(
-                    'Total: ${total.toStringAsFixed(1)}%',
-                  ),
-                  subtitle: Text(
-                    valido
-                        ? 'Porcentajes correctos'
-                        : 'Los porcentajes deben sumar 100%',
+          return RefreshIndicator(
+            onRefresh: _actualizarCalculo,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // 1. Tarjeta destacada de la Nota Final del Curso (H14)
+                _TarjetaNotaFinalCurso(
+                  resultado: _resultadoCalculo,
+                  cargando: _cargandoCalculo,
+                ),
+                const SizedBox(height: 12),
+
+                // 2. Indicador de suma de 100% de unidades (H12)
+                Card(
+                  child: ListTile(
+                    leading: Icon(
+                      valido ? Icons.check_circle : Icons.warning,
+                      color: valido ? Colors.green : Colors.red,
+                    ),
+                    title: Text(
+                      'Total unidades: ${total.toStringAsFixed(1)}%',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      valido
+                          ? 'Porcentajes correctos'
+                          : 'Los porcentajes de las unidades deben sumar 100%',
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: unidades.isEmpty
-                    ? const Center(
-                        child: Text('Todavía no hay unidades.'),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: unidades.length,
-                        itemBuilder: (context, index) {
-                          final unidad = unidades[index];
+                const SizedBox(height: 16),
 
-                          return Card(
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                child: Text('${index + 1}'),
-                              ),
-                              title: Text(unidad.nombre),
-                              subtitle: Text(
-                                '${unidad.porcentaje.toStringAsFixed(1)}%',
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TiposEvaluacionScreen(
-                                      cursoId: cursoId,
-                                      cursoNombre: cursoNombre,
-                                      unidadId: unidad.id,
-                                      unidadNombre: unidad.nombre,
-                                      unidadPorcentaje: unidad.porcentaje,
-                                    ),
-                                  ),
-                                );
-                              },
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (opcion) {
-                                  if (opcion == 'editar') {
-                                    _mostrarFormulario(
-                                      context,
-                                      service,
-                                      user.uid,
-                                      cursoId,
-                                      unidad: unidad,
-                                    );
-                                  } else if (opcion == 'eliminar') {
-                                    _eliminarUnidad(
-                                      context,
-                                      service,
-                                      user.uid,
-                                      cursoId,
-                                      unidad,
-                                    );
-                                  }
-                                },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                    value: 'editar',
-                                    child: Text('Editar'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'eliminar',
-                                    child: Text('Eliminar'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
+                // Título de la sección de unidades
+                Text(
+                  'Unidades del curso (${unidades.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+
+                // 3. Lista de unidades
+                if (unidades.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32.0),
+                    child: Center(
+                      child: Text('Todavía no hay unidades registradas.'),
+                    ),
+                  )
+                else
+                  for (int index = 0; index < unidades.length; index++) ...[
+                    _buildUnidadItem(context, user.uid, unidades[index], index),
+                    const SizedBox(height: 8),
+                  ],
+                const SizedBox(height: 80),
+              ],
+            ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _mostrarFormulario(
-          context,
-          service,
-          user.uid,
-          cursoId,
-        ),
+        onPressed: () async {
+          await _mostrarFormulario(
+            context,
+            _service,
+            user.uid,
+            widget.cursoId,
+          );
+          _actualizarCalculo();
+        },
         icon: const Icon(Icons.add),
         label: const Text('Nueva unidad'),
+      ),
+    );
+  }
+
+  Widget _buildUnidadItem(
+    BuildContext context,
+    String uid,
+    Unidad unidad,
+    int index,
+  ) {
+    final notaUnidad = _resultadoCalculo?.notasPorUnidad[unidad.id];
+    final estaCompleta = _resultadoCalculo?.unidadCompleta[unidad.id] ?? false;
+
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Text('${index + 1}'),
+        ),
+        title: Text(
+          unidad.nombre,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 2),
+            Text('Peso: ${unidad.porcentaje.toStringAsFixed(1)}%'),
+            const SizedBox(height: 2),
+            Text(
+              notaUnidad != null
+                  ? 'Nota: ${notaUnidad.toStringAsFixed(1)} / 20 ${estaCompleta ? "(completa)" : "(parcial)"}'
+                  : 'Nota: Sin notas registradas',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: notaUnidad == null
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : (notaUnidad >= 10.5 ? Colors.green.shade700 : Colors.red.shade700),
+              ),
+            ),
+          ],
+        ),
+        isThreeLine: true,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TiposEvaluacionScreen(
+                cursoId: widget.cursoId,
+                cursoNombre: widget.cursoNombre,
+                unidadId: unidad.id,
+                unidadNombre: unidad.nombre,
+                unidadPorcentaje: unidad.porcentaje,
+              ),
+            ),
+          );
+          // Al volver de TiposEvaluacionScreen, actualizar el cálculo en tiempo real
+          _actualizarCalculo();
+        },
+        trailing: PopupMenuButton<String>(
+          onSelected: (opcion) async {
+            if (opcion == 'editar') {
+              await _mostrarFormulario(
+                context,
+                _service,
+                uid,
+                widget.cursoId,
+                unidad: unidad,
+              );
+              _actualizarCalculo();
+            } else if (opcion == 'eliminar') {
+              await _eliminarUnidad(
+                context,
+                _service,
+                uid,
+                widget.cursoId,
+                unidad,
+              );
+              _actualizarCalculo();
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'editar',
+              child: Text('Editar'),
+            ),
+            PopupMenuItem(
+              value: 'eliminar',
+              child: Text('Eliminar'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -172,7 +287,7 @@ class UnidadesScreen extends StatelessWidget {
       text: unidad?.nombre ?? '',
     );
     final porcentajeController = TextEditingController(
-      text: unidad?.porcentaje.toString() ?? '',
+      text: unidad != null ? unidad.porcentaje.toString() : '',
     );
 
     final formKey = GlobalKey<FormState>();
@@ -203,8 +318,7 @@ class UnidadesScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: porcentajeController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(
+                  keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
@@ -344,5 +458,206 @@ class UnidadesScreen extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+/// Tarjeta destacada superior que muestra la Nota Final del Curso (H14)
+class _TarjetaNotaFinalCurso extends StatelessWidget {
+  final ResultadoCalculoCurso? resultado;
+  final bool cargando;
+
+  const _TarjetaNotaFinalCurso({
+    required this.resultado,
+    required this.cargando,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    if (cargando && resultado == null) {
+      return Card(
+        color: colorScheme.surfaceContainerHigh,
+        child: const Padding(
+          padding: EdgeInsets.all(20.0),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Text('Calculando promedio del curso...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (resultado == null || resultado!.estado == EstadoCalculoCurso.sinDatos) {
+      return Card(
+        color: colorScheme.surfaceContainerHigh,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Promedio final del curso',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      resultado?.mensajeEstado ??
+                          'Registra notas en tus unidades para calcular el promedio final.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Caso 1: Cálculo Incompleto (Criterio 3 de H14)
+    if (resultado!.estado == EstadoCalculoCurso.incompleto) {
+      return Card(
+        color: Colors.amber.shade50,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: Colors.amber.shade300, width: 1.5),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.pending_actions, color: Colors.amber.shade900),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cálculo pendiente / incompleto',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          resultado!.mensajeEstado,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.brown.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (resultado!.notaAcumulada != null) ...[
+                const SizedBox(height: 10),
+                const Divider(),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Nota acumulada parcial:',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.brown.shade800,
+                      ),
+                    ),
+                    Text(
+                      '${resultado!.notaAcumulada!.toStringAsFixed(1)} / 20',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade900,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Caso 2: Cálculo Completo (Criterios 1 y 2 de H14)
+    final nota = resultado!.notaFinal!;
+    final aprobado = resultado!.esAprobado;
+
+    return Card(
+      color: colorScheme.surfaceContainerHigh,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Nota final del curso',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${nota.toStringAsFixed(1)} / 20',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    color: aprobado ? Colors.green.shade700 : Colors.red.shade700,
+                  ),
+                ),
+              ],
+            ),
+            Chip(
+              avatar: Icon(
+                aprobado ? Icons.check_circle : Icons.cancel,
+                size: 18,
+                color: Colors.white,
+              ),
+              backgroundColor: aprobado ? Colors.green.shade600 : Colors.red.shade600,
+              label: Text(
+                aprobado ? 'Aprobado' : 'Desaprobado',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
