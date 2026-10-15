@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/unidad.dart';
 import '../services/unidades_service.dart';
+import 'tipos_evaluacion_screen.dart';
 
 class UnidadesScreen extends StatelessWidget {
   final String cursoId;
@@ -93,6 +94,20 @@ class UnidadesScreen extends StatelessWidget {
                               subtitle: Text(
                                 '${unidad.porcentaje.toStringAsFixed(1)}%',
                               ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TiposEvaluacionScreen(
+                                      cursoId: cursoId,
+                                      cursoNombre: cursoNombre,
+                                      unidadId: unidad.id,
+                                      unidadNombre: unidad.nombre,
+                                      unidadPorcentaje: unidad.porcentaje,
+                                    ),
+                                  ),
+                                );
+                              },
                               trailing: PopupMenuButton<String>(
                                 onSelected: (opcion) {
                                   if (opcion == 'editar') {
