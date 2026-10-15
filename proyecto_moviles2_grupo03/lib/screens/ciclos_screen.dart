@@ -95,11 +95,9 @@ class CiclosScreen extends StatelessWidget {
                     ),
                   ),
 
-                  subtitle: ciclo.fechaInicio != null
-                      ? Text(
-                          'Creado: ${_formatearFecha(ciclo.fechaInicio!)}',
-                        )
-                      : null,
+                  subtitle: Text(
+                    'Creado: ${_formatearFecha(ciclo.fechaInicio)}',
+                  ),
 
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline),
