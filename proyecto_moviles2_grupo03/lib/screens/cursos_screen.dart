@@ -6,7 +6,6 @@ import '../services/calculo_curso_service.dart';
 import '../services/calculos_multinivel.dart';
 import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
-import '../services/simulador_curso_service.dart';
 import '../theme/estado_nota_colors.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/card_resultado.dart';
@@ -15,6 +14,7 @@ import '../widgets/estado_vacio.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_curso.dart';
 import 'escanear_notas_screen.dart';
+import 'simulador_screen.dart';
 import 'unidades_screen.dart';
 
 class CursosScreen extends StatefulWidget {
@@ -182,142 +182,34 @@ class _CursosScreenState extends State<CursosScreen> {
     if (mounted) _recalcular();
   }
 
-  // H16: simulador de nota para el curso completo.
+  // H16 + H17: simulador de nota para el curso completo con UI responsiva.
   Future<void> _abrirSimuladorCurso(Curso curso) async {
     final uid = _uid;
     if (uid == null) return;
 
-    final objetivoController = TextEditingController(text: '10.5');
-
     try {
-      final resultados = await Future.wait<dynamic>([
-        _calculoService.obtenerCalculoCurso(uid, curso.id),
-        _calculoService.obtenerPesosUnidades(uid, curso.id),
-      ]);
+      final pesos = await _calculoService.obtenerPesosUnidades(uid, curso.id);
 
       if (!mounted) return;
-
-      final calculo = resultados[0] as ResultadoCalculoCurso;
-      final pesos = resultados[1] as Map<String, double>;
 
       if (pesos.isEmpty) {
         _mostrarMensaje('Este curso todavía no tiene unidades registradas.');
         return;
       }
 
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: Text('Simulador H16 · ${curso.nombre}'),
-            content: TextField(
-              controller: objetivoController,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Nota objetivo del curso',
-                helperText: 'Ingresa un valor entre 0 y 20',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final objetivo = double.tryParse(
-                    objetivoController.text.trim().replaceAll(',', '.'),
-                  );
-
-                  if (objetivo == null ||
-                      objetivo < 0 ||
-                      objetivo > 20) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Ingresa una nota válida entre 0 y 20.'),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final simulacion = SimuladorCursoService.calcular(
-                    objetivo: objetivo,
-                    notasPorUnidad: calculo.notasPorUnidad,
-                    unidadCompleta: calculo.unidadCompleta,
-                    pesosPorUnidad: pesos,
-                  );
-
-                  Navigator.pop(dialogContext);
-
-                  showDialog<void>(
-                    context: context,
-                    builder: (resultadoContext) {
-                      final sinPendientes =
-                          simulacion.unidadesPendientes == 0;
-
-                      final imposible =
-                          !sinPendientes &&
-                          !simulacion.objetivoAlcanzable;
-
-                      String mensaje;
-
-                      if (sinPendientes) {
-                        mensaje =
-                            'No hay unidades pendientes.\n\n'
-                            'Nota final actual: '
-                            '${calculo.notaFinal?.toStringAsFixed(1) ?? "No disponible"}.\n'
-                            'Objetivo ingresado: ${objetivo.toStringAsFixed(1)}.';
-                      } else if (imposible) {
-                        mensaje =
-                            'La meta no es alcanzable con las unidades pendientes.\n\n'
-                            'Máximo promedio posible del curso: '
-                            '${simulacion.maximoAlcanzable.toStringAsFixed(1)}.\n'
-                            'Nota objetivo: ${objetivo.toStringAsFixed(1)}.';
-                      } else {
-                        mensaje =
-                            'Nota objetivo: ${objetivo.toStringAsFixed(1)}\n'
-                            'Unidades pendientes: ${simulacion.unidadesPendientes}\n'
-                            'Peso pendiente: ${simulacion.porcentajePendiente.toStringAsFixed(1)} %\n\n'
-                            'Promedio necesario en las unidades pendientes: '
-                            '${simulacion.notaNecesaria.toStringAsFixed(1)}\n'
-                            'Máximo promedio posible del curso: '
-                            '${simulacion.maximoAlcanzable.toStringAsFixed(1)}';
-                      }
-
-                      return AlertDialog(
-                        title: Text(
-                          imposible
-                              ? 'Meta inalcanzable'
-                              : 'Resultado de simulación',
-                        ),
-                        content: Text(mensaje),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(resultadoContext),
-                            child: const Text('Cerrar'),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
-                child: const Text('Calcular'),
-              ),
-            ],
-          );
-        },
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SimuladorScreen(
+            cursoId: curso.id,
+            cursoNombre: curso.nombre,
+            cicloNombre: widget.cicloNombre,
+          ),
+        ),
       );
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        _mostrarMensaje('No se pudo calcular la simulación del curso.');
+        _mostrarMensaje('No se pudo abrir el simulador del curso.');
       }
-    } finally {
-      objetivoController.dispose();
     }
   }
 

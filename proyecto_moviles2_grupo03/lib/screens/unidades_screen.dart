@@ -21,6 +21,7 @@ import '../widgets/linea_pesos.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_unidad.dart';
 import 'escanear_notas_screen.dart';
+import 'simulador_screen.dart';
 import 'tipos_evaluacion_screen.dart';
 
 /// Pantalla 05 - Detalle de curso: nota del curso y sus unidades (H12 + H14).
@@ -255,6 +256,23 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
         padre: 'Curso',
         titulo: _nombre,
         acciones: [
+          IconButton(
+            icon: const Icon(Icons.calculate_rounded),
+            tooltip: 'Simulador de notas',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SimuladorScreen(
+                    cursoId: widget.cursoId,
+                    cursoNombre: _nombre,
+                    notasPorUnidad: _resultado?.notasPorUnidad,
+                    unidadCompleta: _resultado?.unidadCompleta,
+                    pesosPorUnidad: {for (final u in _unidades) u.id: u.porcentaje},
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.document_scanner_rounded),
             tooltip: 'Escanear unidades',

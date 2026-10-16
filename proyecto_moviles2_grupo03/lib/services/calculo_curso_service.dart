@@ -19,7 +19,7 @@ class ResumenCiclo {
 }
 
 class CalculoCursoService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> _cursosRef(String uid) {
     return _firestore.collection('usuarios').doc(uid).collection('cursos');
