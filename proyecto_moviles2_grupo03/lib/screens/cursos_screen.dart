@@ -1,23 +1,12 @@
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/curso.dart';
-import '../services/calculo_curso_service.dart';
-import '../services/calculos_multinivel.dart';
-import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
-import '../theme/estado_nota_colors.dart';
-import '../widgets/app_bar_nivel.dart';
-import '../widgets/card_resultado.dart';
-import '../widgets/dialogos.dart';
-import '../widgets/estado_vacio.dart';
-import '../widgets/seccion_titulo.dart';
-import '../widgets/tarjeta_curso.dart';
-import 'escanear_notas_screen.dart';
 import 'unidades_screen.dart';
 
-/// Pantalla 04 - Detalle de ciclo: promedio del ciclo y sus cursos (H11).
-class CursosScreen extends StatefulWidget {
+class CursosScreen extends StatelessWidget {
   final String cicloId;
   final String cicloNombre;
 
@@ -28,274 +17,386 @@ class CursosScreen extends StatefulWidget {
   });
 
   @override
-  State<CursosScreen> createState() => _CursosScreenState();
-}
-
-class _CursosScreenState extends State<CursosScreen> {
-  final CursosService _service = CursosService();
-  final CiclosService _ciclosService = CiclosService();
-  final CalculoCursoService _calculoService = CalculoCursoService();
-
-  String? _uid;
-  Stream<List<Curso>>? _cursosStream;
-
-  /// Calculos cacheados por la lista de cursos actual, para no recalcular en cada build.
-  String _claveCalculos = '';
-  Future<Map<String, ResultadoCalculoCurso>>? _calculos;
-
-  @override
-  void initState() {
-    super.initState();
-    _uid = FirebaseAuth.instance.currentUser?.uid;
-    final uid = _uid;
-    if (uid != null) _cursosStream = _service.obtenerCursos(uid, widget.cicloId);
-  }
-
-  Future<Map<String, ResultadoCalculoCurso>> _calculosPara(List<Curso> cursos) {
-    final clave = cursos.map((c) => c.id).join(',');
-    if (_calculos == null || clave != _claveCalculos) {
-      _claveCalculos = clave;
-      _calculos = _calculoService.obtenerCalculosCursos(_uid!, cursos);
-    }
-    return _calculos!;
-  }
-
-  void _recalcular() => setState(() => _calculos = null);
-
-  void _mostrarMensaje(String texto) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(texto)));
-  }
-
-  Future<void> _crearOEditarCurso({Curso? curso}) async {
-    final uid = _uid;
-    if (uid == null) return;
-    final nombre = await pedirNombre(
-      context,
-      titulo: curso == null ? 'Agregar curso' : 'Editar curso',
-      etiqueta: 'Nombre del curso',
-      hint: 'Ej. Soluciones Móviles II',
-      inicial: curso?.nombre ?? '',
-      textoBoton: curso == null ? 'Agregar' : 'Guardar',
-    );
-    if (nombre == null) return;
-    try {
-      if (curso == null) {
-        await _service.crearCurso(uid, widget.cicloId, nombre);
-      } else {
-        await _service.actualizarCurso(uid, curso, nombre);
-      }
-      if (mounted) _mostrarMensaje(curso == null ? 'Curso agregado.' : 'Curso actualizado.');
-    } catch (_) {
-      if (mounted) _mostrarMensaje('No se pudo guardar el curso.');
-    }
-  }
-
-  Future<void> _eliminarCurso(Curso curso) async {
-    final uid = _uid;
-    if (uid == null) return;
-    final ok = await confirmarEliminar(
-      context,
-      titulo: 'Eliminar curso',
-      mensaje: 'Se eliminará "${curso.nombre}" con todas sus unidades y notas.',
-    );
-    if (!ok) return;
-    try {
-      await _service.eliminarCurso(uid, curso.id);
-      if (mounted) _mostrarMensaje('Curso eliminado.');
-    } catch (_) {
-      if (mounted) _mostrarMensaje('No se pudo eliminar el curso.');
-    }
-  }
-
-  Future<void> _eliminarCiclo() async {
-    final uid = _uid;
-    if (uid == null) return;
-    final ok = await confirmarEliminar(
-      context,
-      titulo: 'Eliminar ciclo',
-      mensaje: 'Se eliminará "${widget.cicloNombre}" con todos sus cursos, unidades y notas.',
-    );
-    if (!ok) return;
-    try {
-      await _ciclosService.eliminarCiclo(uid, widget.cicloId);
-      if (!mounted) return;
-      _mostrarMensaje('Ciclo eliminado.');
-      Navigator.of(context).pop();
-    } catch (_) {
-      if (mounted) _mostrarMensaje('No se pudo eliminar el ciclo.');
-    }
-  }
-
-  /// H19: registra un curso completo escaneando el reporte del portal.
-  Future<void> _escanearReporte() async {
-    final cursoId = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => EscanearNotasScreen(cicloId: widget.cicloId, cicloNombre: widget.cicloNombre),
-      ),
-    );
-    if (cursoId != null) _recalcular();
-  }
-
-  Future<void> _abrirCurso(Curso curso) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => UnidadesScreen(cursoId: curso.id, cursoNombre: curso.nombre)),
-    );
-    _recalcular();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final stream = _cursosStream;
-    if (stream == null) {
-      return const Scaffold(body: Center(child: Text('Debes iniciar sesión.')));
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Debes iniciar sesión.'),
+        ),
+      );
     }
+
+    final service = CursosService();
 
     return Scaffold(
-      appBar: AppBarNivel(
-        padre: 'Ciclo',
-        titulo: widget.cicloNombre,
-        acciones: [
-          IconButton(
-            icon: const Icon(Icons.document_scanner_rounded),
-            tooltip: 'Escanear reporte de notas',
-            onPressed: _escanearReporte,
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert_rounded),
-            tooltip: 'Más opciones',
-            onPressed: () => mostrarOpciones(
-              context,
-              titulo: widget.cicloNombre,
-              opciones: [
-                OpcionMenu(
-                  icono: Icons.delete_outline_rounded,
-                  texto: 'Eliminar ciclo',
-                  onTap: _eliminarCiclo,
-                  destructiva: true,
-                ),
-              ],
-            ),
-          ),
-        ],
+      appBar: AppBar(
+        title: Text('Cursos - $cicloNombre'),
+        centerTitle: true,
       ),
       body: StreamBuilder<List<Curso>>(
-        stream: stream,
+        stream: service.obtenerCursos(user.uid, cicloId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(child: Text('No se pudieron cargar los cursos.'));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final cursos = snapshot.data!;
-          if (cursos.isEmpty) {
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-              children: [
-                EstadoVacio(
-                  icono: Icons.menu_book_rounded,
-                  titulo: 'Aún no tienes cursos',
-                  texto: 'Agrega los cursos que llevas en ${widget.cicloNombre}. '
-                      'Luego registra sus unidades y notas.',
-                  textoBoton: 'Agregar primer curso',
-                  onPressed: _crearOEditarCurso,
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _escanearReporte,
-                    icon: const Icon(Icons.document_scanner_rounded),
-                    label: const Text('Escanear reporte de notas'),
-                  ),
-                ),
-              ],
+            return const Center(
+              child: Text('No se pudieron cargar los cursos.'),
             );
           }
 
-          return FutureBuilder<Map<String, ResultadoCalculoCurso>>(
-            future: _calculosPara(cursos),
-            builder: (context, calc) {
-              final resultados = calc.data ?? const {};
-              final cargando = calc.connectionState != ConnectionState.done;
-              return RefreshIndicator(
-                onRefresh: () async {
-                  _recalcular();
-                  await _calculosPara(cursos);
-                },
-                child: _lista(context, cursos, resultados, cargando),
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          final cursos = snapshot.data ?? <Curso>[];
+
+          if (cursos.isEmpty) {
+            return _EstadoVacio(
+              onCrear: () => _mostrarDialogoCurso(
+                context,
+                service,
+                user.uid,
+                cicloId,
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: cursos.length,
+            itemBuilder: (context, index) {
+              final curso = cursos[index];
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.book),
+                  ),
+                  title: Text(
+                    curso.nombre,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Toca para gestionar las unidades',
+                  ),
+
+                  // Abrir unidades del curso seleccionado.
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => UnidadesScreen(
+                          curso: curso,
+                        ),
+                      ),
+                    );
+                  },
+
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (opcion) {
+                      if (opcion == 'editar') {
+                        _mostrarDialogoCurso(
+                          context,
+                          service,
+                          user.uid,
+                          cicloId,
+                          curso: curso,
+                        );
+                      } else if (opcion == 'eliminar') {
+                        _confirmarEliminar(
+                          context,
+                          service,
+                          user.uid,
+                          curso,
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'editar',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined),
+                            SizedBox(width: 8),
+                            Text('Editar'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'eliminar',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline),
+                            SizedBox(width: 8),
+                            Text('Eliminar'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _crearOEditarCurso,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Agregar curso'),
+        onPressed: () => _mostrarDialogoCurso(
+          context,
+          service,
+          user.uid,
+          cicloId,
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text('Nuevo curso'),
       ),
     );
   }
 
-  Widget _lista(
+  static Future<void> _mostrarDialogoCurso(
     BuildContext context,
-    List<Curso> cursos,
-    Map<String, ResultadoCalculoCurso> resultados,
-    bool cargando,
-  ) {
-    final estado = EstadoNotaColors.of(context);
-    final promedio = CalculoCursoService.promedioDeCursos(resultados.values);
-    final conNotas = resultados.values.where((r) => r.notaActual != null).length;
-    final enRiesgo = resultados.values.where((r) => (r.notaActual ?? 99) < 10.5).length;
+    CursosService service,
+    String uid,
+    String cicloId, {
+    Curso? curso,
+  }) async {
+    final controlador = TextEditingController(
+      text: curso?.nombre ?? '',
+    );
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 104),
-      children: [
-        CardResultado(
-          nota: cargando ? null : promedio,
-          titulo: 'Promedio del ciclo',
-          subtitulo: cargando ? 'Calculando…' : '$conNotas de ${cursos.length} cursos con notas',
-        ),
-        const SizedBox(height: 22),
-        SeccionTitulo(
-          'Cursos · ${cursos.length}',
-          trailing: enRiesgo == 0
-              ? null
-              : Text(
-                  enRiesgo == 1 ? '1 en riesgo' : '$enRiesgo en riesgo',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: estado.desaprobado),
+    final editar = curso != null;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          bool guardando = false;
+
+          return StatefulBuilder(
+            builder: (contextDialogo, setDialogState) {
+              return AlertDialog(
+                title: Text(
+                  editar ? 'Editar curso' : 'Crear curso',
                 ),
-        ),
-        const SizedBox(height: 10),
-        for (final curso in cursos) ...[
-          TarjetaCurso(
-            key: ValueKey(curso.id),
-            nombre: curso.nombre,
-            nota: resultados[curso.id]?.notaActual,
-            pctEvaluado: resultados[curso.id]?.porcentajeEvaluado ?? 0,
-            cargando: cargando,
-            onTap: () => _abrirCurso(curso),
-            onLongPress: () => mostrarOpciones(
-              context,
-              titulo: curso.nombre,
-              opciones: [
-                OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar curso', onTap: () => _crearOEditarCurso(curso: curso)),
-                OpcionMenu(
-                  icono: Icons.delete_outline_rounded,
-                  texto: 'Eliminar curso',
-                  onTap: () => _eliminarCurso(curso),
-                  destructiva: true,
+                content: TextField(
+                  controller: controlador,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.words,
+                  enabled: !guardando,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre del curso',
+                    hintText: 'Ejemplo: Programación',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ],
-            ),
+                actions: [
+                  TextButton(
+                    onPressed: guardando
+                        ? null
+                        : () => Navigator.pop(dialogContext),
+                    child: const Text('Cancelar'),
+                  ),
+                  FilledButton(
+                    onPressed: guardando
+                        ? null
+                        : () async {
+                            final nombre = controlador.text.trim();
+
+                            if (nombre.isEmpty) {
+                              ScaffoldMessenger.of(
+                                contextDialogo,
+                              ).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Ingresa el nombre del curso.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            setDialogState(() {
+                              guardando = true;
+                            });
+
+                            try {
+                              if (editar) {
+                                await service.actualizarCurso(
+                                  uid,
+                                  curso,
+                                  nombre,
+                                );
+                              } else {
+                                await service.crearCurso(
+                                  uid,
+                                  cicloId,
+                                  nombre,
+                                );
+                              }
+
+                              if (!dialogContext.mounted) return;
+
+                              Navigator.pop(dialogContext);
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      editar
+                                          ? 'Curso actualizado correctamente.'
+                                          : 'Curso creado correctamente.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (!contextDialogo.mounted) return;
+
+                              setDialogState(() {
+                                guardando = false;
+                              });
+
+                              ScaffoldMessenger.of(
+                                contextDialogo,
+                              ).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No se pudo guardar el curso.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                    child: Text(
+                      guardando
+                          ? 'Guardando...'
+                          : editar
+                              ? 'Guardar'
+                              : 'Crear',
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      controlador.dispose();
+    }
+  }
+
+  static Future<void> _confirmarEliminar(
+    BuildContext context,
+    CursosService service,
+    String uid,
+    Curso curso,
+  ) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Eliminar curso'),
+          content: Text(
+            '¿Deseas eliminar el curso "${curso.nombre}"?',
           ),
-          const SizedBox(height: 10),
-        ],
-      ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                false,
+              ),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                true,
+              ),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmar != true) return;
+
+    try {
+      await service.eliminarCurso(uid, curso.id);
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Curso eliminado correctamente.'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo eliminar el curso.'),
+        ),
+      );
+    }
+  }
+}
+
+class _EstadoVacio extends StatelessWidget {
+  final VoidCallback onCrear;
+
+  const _EstadoVacio({
+    required this.onCrear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.book_outlined,
+              size: 80,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No tienes cursos creados',
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Agrega los cursos correspondientes a este ciclo.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: onCrear,
+              icon: const Icon(Icons.add),
+              label: const Text('Crear mi primer curso'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
