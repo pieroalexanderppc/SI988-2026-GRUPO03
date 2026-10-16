@@ -1,17 +1,46 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../models/nota.dart';
+import '../models/tipo_evaluacion.dart';
 import '../models/unidad.dart';
+import '../services/calculos_evaluaciones.dart';
+import '../services/evaluaciones_service.dart';
+import '../services/unidades_service.dart';
+import '../utils/formato_nota.dart';
+import '../widgets/app_bar_nivel.dart';
+import '../widgets/barra_pesos.dart';
+import '../widgets/boton_punteado.dart';
+import '../widgets/card_resultado.dart';
+import '../widgets/dialogos.dart';
+import '../widgets/estado_vacio.dart';
+import '../widgets/grupo_tipo_evaluacion.dart';
+import '../widgets/hoja_nota.dart';
+import '../widgets/hoja_simulador_unidad.dart';
+import '../widgets/linea_pesos.dart';
+import '../widgets/seccion_titulo.dart';
 
+/// Pantalla 06 - Detalle de unidad: tipos de evaluacion y notas (H13).
+///
+/// Los streams de Firestore se abren una sola vez en [initState]. Antes se
+/// creaban dentro de build y cada tarjeta avisaba sus notas al padre desde su
+/// build, lo que provocaba un ciclo de reconstrucciones sin fin.
 class TiposEvaluacionScreen extends StatefulWidget {
   final String cursoId;
-  final Unidad unidad;
+  final String cursoNombre;
+  final String unidadId;
+  final String unidadNombre;
+  final double unidadPorcentaje;
 
   const TiposEvaluacionScreen({
     super.key,
     required this.cursoId,
-    required this.unidad,
+    required this.cursoNombre,
+    required this.unidadId,
+    required this.unidadNombre,
+    required this.unidadPorcentaje,
   });
 
   @override
@@ -19,744 +48,378 @@ class TiposEvaluacionScreen extends StatefulWidget {
 }
 
 class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final EvaluacionesService _service = EvaluacionesService();
+  final UnidadesService _unidadesService = UnidadesService();
 
-  bool _guardando = false;
+  late String _nombre = widget.unidadNombre;
+  late double _porcentaje = widget.unidadPorcentaje;
 
-  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+  String? _uid;
+  StreamSubscription<List<TipoEvaluacion>>? _tiposSub;
+  final Map<String, StreamSubscription<List<Nota>>> _notasSubs = {};
 
-  CollectionReference<Map<String, dynamic>>? get _tiposRef {
+  List<TipoEvaluacion> _tipos = [];
+  final Map<String, List<Nota>> _notasPorTipo = {};
+
+  /// Notas borradas que se ocultan hasta que Firestore confirme el cambio.
+  final Set<String> _ocultas = {};
+  bool _cargando = true;
+  bool _error = false;
+  String? _expandido;
+
+  @override
+  void initState() {
+    super.initState();
+    _uid = FirebaseAuth.instance.currentUser?.uid;
     final uid = _uid;
-    if (uid == null) return null;
-
-    return _firestore
-        .collection('usuarios')
-        .doc(uid)
-        .collection('cursos')
-        .doc(widget.cursoId)
-        .collection('unidades')
-        .doc(widget.unidad.id)
-        .collection('tiposEvaluacion');
-  }
-
-  void _mensaje(String texto) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
-  }
-
-  double? _numero(dynamic valor) {
-    if (valor is num && valor.toDouble().isFinite) {
-      return valor.toDouble();
-    }
-    return null;
-  }
-
-  Future<void> _mostrarFormulario({
-    String? id,
-    String? nombre,
-    double? porcentaje,
-  }) async {
-    final nombreController = TextEditingController(text: nombre ?? '');
-
-    final porcentajeController = TextEditingController(
-      text: porcentaje == null ? '' : porcentaje.toString(),
+    if (uid == null) return;
+    _tiposSub = _service.obtenerTiposEvaluacion(uid, widget.cursoId, widget.unidadId).listen(
+      (tipos) {
+        if (!mounted) return;
+        setState(() {
+          _tipos = tipos;
+          _cargando = false;
+          _error = false;
+          if (_expandido == null || !tipos.any((t) => t.id == _expandido)) {
+            _expandido = tipos.isEmpty ? null : tipos.first.id;
+          }
+        });
+        _sincronizarNotas(uid, tipos);
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _cargando = false;
+          _error = true;
+        });
+      },
     );
+  }
 
-    final formKey = GlobalKey<FormState>();
+  /// Abre un stream de notas por cada tipo nuevo y cierra los de tipos borrados.
+  void _sincronizarNotas(String uid, List<TipoEvaluacion> tipos) {
+    final ids = tipos.map((t) => t.id).toSet();
+    for (final id in _notasSubs.keys.where((id) => !ids.contains(id)).toList()) {
+      _notasSubs.remove(id)?.cancel();
+      _notasPorTipo.remove(id);
+    }
+    for (final id in ids.where((id) => !_notasSubs.containsKey(id))) {
+      _notasSubs[id] = _service.obtenerNotas(uid, widget.cursoId, widget.unidadId, id).listen((notas) {
+        if (!mounted) return;
+        setState(() {
+          _notasPorTipo[id] = notas;
+          final vigentes = notas.map((n) => n.id).toSet();
+          _ocultas.removeWhere((oculta) => !vigentes.contains(oculta));
+        });
+      });
+    }
+  }
 
+  @override
+  void dispose() {
+    _tiposSub?.cancel();
+    for (final sub in _notasSubs.values) {
+      sub.cancel();
+    }
+    super.dispose();
+  }
+
+  Map<String, List<Nota>> get _notasVisibles => {
+        for (final e in _notasPorTipo.entries)
+          e.key: e.value.where((n) => !_ocultas.contains(n.id)).toList(),
+      };
+
+  void _mostrarMensaje(String texto, {SnackBarAction? accion}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(texto), action: accion, duration: const Duration(seconds: 4)));
+  }
+
+  // --- Unidad ---
+
+  Future<void> _editarUnidad() async {
+    final uid = _uid;
+    if (uid == null) return;
+    final r = await pedirNombreYPeso(
+      context,
+      titulo: 'Editar unidad',
+      etiquetaNombre: 'Nombre de la unidad',
+      hintNombre: 'Ej. Unidad 1',
+      inicialNombre: _nombre,
+      inicialPeso: _porcentaje,
+      textoBoton: 'Guardar',
+    );
+    if (r == null) return;
     try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(
-            id == null
-                ? 'Nuevo tipo de evaluación'
-                : 'Editar tipo de evaluación',
+      await _unidadesService.actualizarUnidad(
+        uid,
+        widget.cursoId,
+        Unidad(id: widget.unidadId, nombre: _nombre, cursoId: widget.cursoId, porcentaje: _porcentaje),
+        r.nombre,
+        r.peso,
+      );
+      if (!mounted) return;
+      setState(() {
+        _nombre = r.nombre;
+        _porcentaje = r.peso;
+      });
+      _mostrarMensaje('Unidad actualizada.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo guardar la unidad.');
+    }
+  }
+
+  Future<void> _eliminarUnidad() async {
+    final uid = _uid;
+    if (uid == null) return;
+    final ok = await confirmarEliminar(
+      context,
+      titulo: 'Eliminar unidad',
+      mensaje: 'Se eliminará "$_nombre" con todos sus tipos de evaluación y notas.',
+    );
+    if (!ok) return;
+    try {
+      await _unidadesService.eliminarUnidad(uid, widget.cursoId, widget.unidadId);
+      if (!mounted) return;
+      _mostrarMensaje('Unidad eliminada.');
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo eliminar la unidad.');
+    }
+  }
+
+  // --- Tipos de evaluacion ---
+
+  double get _totalTipos => CalculosEvaluaciones.calcularTotalPorcentaje(_tipos);
+
+  Future<void> _crearOEditarTipo({TipoEvaluacion? tipo}) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final r = await pedirNombreYPeso(
+      context,
+      titulo: tipo == null ? 'Nuevo tipo de evaluación' : 'Editar tipo de evaluación',
+      etiquetaNombre: 'Nombre',
+      hintNombre: 'Ej. Laboratorio, Examen',
+      inicialNombre: tipo?.nombre ?? '',
+      inicialPeso: tipo?.porcentaje,
+      pesoDisponible: 100 - _totalTipos + (tipo?.porcentaje ?? 0),
+      textoBoton: tipo == null ? 'Crear' : 'Guardar',
+    );
+    if (r == null) return;
+    try {
+      if (tipo == null) {
+        await _service.crearTipoEvaluacion(uid, widget.cursoId, widget.unidadId, r.nombre, r.peso);
+      } else {
+        await _service.actualizarTipoEvaluacion(uid, widget.cursoId, widget.unidadId, tipo, r.nombre, r.peso);
+      }
+      if (mounted) _mostrarMensaje(tipo == null ? 'Tipo de evaluación creado.' : 'Tipo de evaluación actualizado.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo guardar el tipo de evaluación.');
+    }
+  }
+
+  Future<void> _eliminarTipo(TipoEvaluacion tipo) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final ok = await confirmarEliminar(
+      context,
+      titulo: 'Eliminar tipo de evaluación',
+      mensaje: 'Se eliminará "${tipo.nombre}" y todas sus notas.',
+    );
+    if (!ok) return;
+    try {
+      await _service.eliminarTipoEvaluacion(uid, widget.cursoId, widget.unidadId, tipo.id);
+      if (mounted) _mostrarMensaje('Tipo de evaluación eliminado.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo eliminar el tipo de evaluación.');
+    }
+  }
+
+  // --- Simulador (H15) ---
+
+  /// "¿Qué nota necesito?": nota necesaria en una evaluacion pendiente para
+  /// llegar al promedio objetivo de la unidad.
+  void _abrirSimulador() {
+    final notas = _notasVisibles;
+    if (_tipos.isEmpty) {
+      _mostrarMensaje('Primero registra los tipos de evaluación.');
+      return;
+    }
+    if (!CalculosEvaluaciones.validarSumaPorcentajes(_tipos)) {
+      _mostrarMensaje('Los pesos deben sumar 100% para simular '
+          '(ahora suman ${FormatoNota.porcentaje(_totalTipos)}%).');
+      return;
+    }
+    if (_tipos.every((t) => (notas[t.id] ?? []).isNotEmpty)) {
+      _mostrarMensaje('Todas las evaluaciones ya tienen notas: no hay nada pendiente que simular.');
+      return;
+    }
+    mostrarSimuladorUnidad(
+      context,
+      tipos: _tipos,
+      notasPorTipo: notas,
+      subtitulo: '$_nombre · ${widget.cursoNombre}',
+    );
+  }
+
+  // --- Notas ---
+
+  Future<void> _abrirHojaNota({String? tipoId, Nota? nota}) async {
+    final uid = _uid;
+    if (uid == null || _tipos.isEmpty) return;
+    final r = await mostrarHojaNota(
+      context,
+      tipos: _tipos,
+      notasPorTipo: _notasVisibles,
+      tipoInicialId: tipoId ?? _expandido ?? _tipos.first.id,
+      subtitulo: '$_nombre · ${widget.cursoNombre}',
+      nota: nota,
+    );
+    if (r == null) return;
+    try {
+      if (nota == null) {
+        await _service.crearNota(uid, widget.cursoId, widget.unidadId, r.tipoId, r.valor, nombre: r.nombre);
+        if (mounted) setState(() => _expandido = r.tipoId);
+        if (mounted) _mostrarMensaje('Nota agregada.');
+      } else {
+        await _service.actualizarNota(uid, widget.cursoId, widget.unidadId, r.tipoId, nota.id, r.valor, nombre: r.nombre);
+        if (mounted) _mostrarMensaje('Nota actualizada.');
+      }
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo guardar la nota.');
+    }
+  }
+
+  /// Borra una nota deslizada y ofrece deshacer durante 4 segundos.
+  Future<void> _eliminarNota(TipoEvaluacion tipo, Nota nota) async {
+    final uid = _uid;
+    if (uid == null) return;
+    setState(() => _ocultas.add(nota.id));
+    try {
+      await _service.eliminarNota(uid, widget.cursoId, widget.unidadId, tipo.id, nota.id);
+      if (!mounted) return;
+      _mostrarMensaje(
+        'Nota eliminada',
+        accion: SnackBarAction(
+          label: 'Deshacer',
+          onPressed: () => _service.crearNota(
+            uid,
+            widget.cursoId,
+            widget.unidadId,
+            tipo.id,
+            nota.valor,
+            nombre: nota.nombre,
+            fecha: nota.fecha,
           ),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nombreController,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre',
-                      hintText: 'Ej. Prácticas, Examen parcial',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Ingresa el nombre';
-                      }
-                      if (value.trim().length < 2) {
-                        return 'Ingresa al menos 2 caracteres';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: porcentajeController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Porcentaje',
-                      suffixText: '%',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      final numero = double.tryParse(
-                        (value ?? '').trim().replaceAll(',', '.'),
-                      );
-
-                      if (numero == null || !numero.isFinite) {
-                        return 'Ingresa un número válido';
-                      }
-                      if (numero <= 0 || numero > 100) {
-                        return 'Debe ser mayor que 0 y máximo 100';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: _guardando
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) {
-                        return;
-                      }
-
-                      final referencia = _tiposRef;
-
-                      if (referencia == null) {
-                        _mensaje('Inicia sesión para continuar.');
-                        return;
-                      }
-
-                      final nuevoNombre = nombreController.text.trim();
-
-                      final nuevoPorcentaje = double.parse(
-                        porcentajeController.text.trim().replaceAll(',', '.'),
-                      );
-
-                      setState(() {
-                        _guardando = true;
-                      });
-
-                      try {
-                        final existentes = await referencia.get();
-
-                        double sumaOtros = 0;
-
-                        for (final documento in existentes.docs) {
-                          if (documento.id == id) continue;
-
-                          final peso = _numero(documento.data()['porcentaje']);
-
-                          if (peso != null) {
-                            sumaOtros += peso;
-                          }
-                        }
-
-                        if (sumaOtros + nuevoPorcentaje > 100.1) {
-                          _mensaje(
-                            'La suma de los porcentajes no puede '
-                            'superar 100%.',
-                          );
-                          return;
-                        }
-
-                        final datos = <String, dynamic>{
-                          'nombre': nuevoNombre,
-                          'porcentaje': nuevoPorcentaje,
-                        };
-
-                        if (id == null) {
-                          await referencia.add(datos);
-                        } else {
-                          await referencia.doc(id).update(datos);
-                        }
-
-                        if (!mounted || !dialogContext.mounted) {
-                          return;
-                        }
-
-                        Navigator.pop(dialogContext);
-
-                        _mensaje(
-                          id == null
-                              ? 'Tipo de evaluación registrado.'
-                              : 'Tipo de evaluación actualizado.',
-                        );
-                      } catch (e) {
-                        _mensaje('Error al guardar: $e');
-                      } finally {
-                        if (mounted) {
-                          setState(() {
-                            _guardando = false;
-                          });
-                        }
-                      }
-                    },
-              child: _guardando
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Guardar'),
-            ),
-          ],
         ),
       );
-    } finally {
-      nombreController.dispose();
-      porcentajeController.dispose();
-    }
-  }
-
-  Future<void> _eliminarTipo(String id, String nombre) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Eliminar tipo de evaluación'),
-        content: Text('¿Deseas eliminar "$nombre" y sus notas registradas?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true || !mounted) return;
-
-    final referencia = _tiposRef;
-
-    if (referencia == null) {
-      _mensaje('Inicia sesión para continuar.');
-      return;
-    }
-
-    try {
-      final tipoRef = referencia.doc(id);
-      final notas = await tipoRef.collection('notas').get();
-
-      final batch = _firestore.batch();
-
-      for (final nota in notas.docs) {
-        batch.delete(nota.reference);
-      }
-
-      batch.delete(tipoRef);
-      await batch.commit();
-
+    } catch (_) {
       if (!mounted) return;
-      _mensaje('Tipo de evaluación eliminado.');
-    } catch (e) {
-      _mensaje('Error al eliminar: $e');
-    }
-  }
-
-  Future<void> _mostrarSimulador() async {
-    final referencia = _tiposRef;
-
-    if (referencia == null) {
-      _mensaje('Inicia sesión para continuar.');
-      return;
-    }
-
-    try {
-      final snapshot = await referencia.get();
-
-      if (!mounted) return;
-
-      if (snapshot.docs.isEmpty) {
-        _mensaje('Primero registra los tipos de evaluación.');
-        return;
-      }
-
-      final tipos = <Map<String, dynamic>>[];
-      double totalPesos = 0;
-
-      for (final documento in snapshot.docs) {
-        final datos = documento.data();
-        final peso = _numero(datos['porcentaje']);
-
-        if (peso == null || peso <= 0 || peso > 100) {
-          _mensaje('Hay un porcentaje inválido.');
-          return;
-        }
-
-        final notasSnapshot = await documento.reference
-            .collection('notas')
-            .get();
-
-        double sumaNotas = 0;
-        int cantidadNotas = 0;
-
-        for (final notaDoc in notasSnapshot.docs) {
-          final valor = _numero(notaDoc.data()['valor']);
-
-          if (valor == null || valor < 0 || valor > 20) {
-            _mensaje('Existe una nota inválida. Revisa las notas registradas.');
-            return;
-          }
-
-          sumaNotas += valor;
-          cantidadNotas++;
-        }
-
-        tipos.add({
-          'id': documento.id,
-          'nombre': datos['nombre']?.toString() ?? 'Sin nombre',
-          'peso': peso,
-          'cantidadNotas': cantidadNotas,
-          'promedio': cantidadNotas == 0 ? 0.0 : sumaNotas / cantidadNotas,
-        });
-
-        totalPesos += peso;
-      }
-
-      if (!mounted) return;
-
-      if ((totalPesos - 100).abs() > 0.1) {
-        _mensaje(
-          'Los porcentajes deben sumar 100%. '
-          'Actualmente suman ${totalPesos.toStringAsFixed(1)}%.',
-        );
-        return;
-      }
-
-      final pendientes = tipos
-          .where((tipo) => tipo['cantidadNotas'] == 0)
-          .toList();
-
-      if (pendientes.isEmpty) {
-        _mensaje(
-          'Todas las evaluaciones tienen notas. '
-          'No hay evaluaciones pendientes para simular.',
-        );
-        return;
-      }
-
-      String tipoSeleccionado = pendientes.first['id'] as String;
-
-      final objetivoController = TextEditingController(text: '14');
-
-      String resultado = '';
-      bool resultadoPosible = false;
-
-      try {
-        await showDialog<void>(
-          context: context,
-          builder: (dialogContext) => StatefulBuilder(
-            builder: (context, actualizarDialogo) {
-              return AlertDialog(
-                title: const Text('Simulador de nota H15'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Selecciona una evaluación pendiente e '
-                        'indica el promedio objetivo de la unidad.',
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: tipoSeleccionado,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Evaluación pendiente',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: pendientes.map((tipo) {
-                          final peso = tipo['peso'] as double;
-
-                          return DropdownMenuItem<String>(
-                            value: tipo['id'] as String,
-                            child: Text(
-                              '${tipo['nombre']} '
-                              '(${peso.toStringAsFixed(1)}%)',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (valor) {
-                          if (valor == null) return;
-
-                          actualizarDialogo(() {
-                            tipoSeleccionado = valor;
-                            resultado = '';
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: objetivoController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Promedio objetivo (0 a 20)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            final objetivo = double.tryParse(
-                              objetivoController.text.trim().replaceAll(
-                                ',',
-                                '.',
-                              ),
-                            );
-
-                            if (objetivo == null ||
-                                !objetivo.isFinite ||
-                                objetivo < 0 ||
-                                objetivo > 20) {
-                              actualizarDialogo(() {
-                                resultado =
-                                    'Ingresa un objetivo válido entre '
-                                    '0 y 20.';
-                                resultadoPosible = false;
-                              });
-                              return;
-                            }
-
-                            double aporteActual = 0;
-                            double pesoPendienteTotal = 0;
-
-                            for (final tipo in tipos) {
-                              final peso = tipo['peso'] as double;
-                              final cantidad = tipo['cantidadNotas'] as int;
-
-                              if (cantidad > 0) {
-                                aporteActual +=
-                                    (tipo['promedio'] as double) * peso / 100;
-                              } else {
-                                pesoPendienteTotal += peso / 100;
-                              }
-                            }
-
-                            final seleccionado = pendientes.firstWhere(
-                              (tipo) => tipo['id'] == tipoSeleccionado,
-                            );
-
-                            final pesoSeleccionado =
-                                (seleccionado['peso'] as double) / 100;
-
-                            final notaNecesaria =
-                                (objetivo - aporteActual) / pesoSeleccionado;
-
-                            final maximoPosible =
-                                aporteActual + pesoPendienteTotal * 20;
-
-                            late String mensaje;
-                            late bool posible;
-
-                            if (objetivo > maximoPosible + 0.000001) {
-                              mensaje =
-                                  'OBJETIVO IMPOSIBLE\n\n'
-                                  'El promedio máximo posible es '
-                                  '${maximoPosible.toStringAsFixed(2)}/20.\n\n'
-                                  'Incluso obteniendo 20 en todas las '
-                                  'evaluaciones pendientes, no '
-                                  'alcanzarías el objetivo.';
-                              posible = false;
-                            } else if (notaNecesaria > 20) {
-                              mensaje =
-                                  'La evaluación seleccionada no basta '
-                                  'por sí sola.\n\n'
-                                  'Necesitarías '
-                                  '${notaNecesaria.toStringAsFixed(2)}/20 '
-                                  'si las demás evaluaciones pendientes '
-                                  'aportaran cero.\n\n'
-                                  'Promedio máximo posible: '
-                                  '${maximoPosible.toStringAsFixed(2)}/20.\n\n'
-                                  'El objetivo podría alcanzarse con '
-                                  'notas suficientes en las otras '
-                                  'evaluaciones.';
-                              posible = true;
-                            } else if (notaNecesaria <= 0) {
-                              mensaje =
-                                  'Ya alcanzas el objetivo con las '
-                                  'notas actuales, incluso si las demás '
-                                  'evaluaciones pendientes aportan cero.\n\n'
-                                  'Nota necesaria: 0/20.\n'
-                                  'Promedio máximo posible: '
-                                  '${maximoPosible.toStringAsFixed(2)}/20.';
-                              posible = true;
-                            } else {
-                              mensaje =
-                                  'Necesitas '
-                                  '${notaNecesaria.toStringAsFixed(2)}/20 '
-                                  'en "${seleccionado['nombre']}".\n\n'
-                                  'Este cálculo supone que las otras '
-                                  'evaluaciones pendientes aportan cero.\n\n'
-                                  'Promedio máximo posible: '
-                                  '${maximoPosible.toStringAsFixed(2)}/20.';
-                              posible = true;
-                            }
-
-                            actualizarDialogo(() {
-                              resultado = mensaje;
-                              resultadoPosible = posible;
-                            });
-                          },
-                          icon: const Icon(Icons.calculate_outlined),
-                          label: const Text('Calcular nota'),
-                        ),
-                      ),
-                      if (resultado.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: resultadoPosible
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest
-                                : Theme.of(context).colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            resultado,
-                            style: TextStyle(
-                              color: resultadoPosible
-                                  ? null
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('Cerrar'),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      } finally {
-        objetivoController.dispose();
-      }
-    } catch (e) {
-      _mensaje('No se pudo calcular la simulación: $e');
+      setState(() => _ocultas.remove(nota.id));
+      _mostrarMensaje('No se pudo eliminar la nota.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final referencia = _tiposRef;
+    if (_uid == null) {
+      return const Scaffold(body: Center(child: Text('Debes iniciar sesión.')));
+    }
+
+    final notas = _notasVisibles;
+    final total = _totalTipos;
+    final pesosValidos = CalculosEvaluaciones.validarSumaPorcentajes(_tipos);
+    final notaUnidad = CalculosEvaluaciones.calcularPromedioParcialUnidad(_tipos, notas);
+    final todosConNotas = _tipos.isNotEmpty && _tipos.every((t) => (notas[t.id] ?? []).isNotEmpty);
+    final esParcial = notaUnidad != null && !(pesosValidos && todosConNotas);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Evaluaciones: ${widget.unidad.nombre}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
+      appBar: AppBarNivel(
+        padre: widget.cursoNombre,
+        titulo: _nombre,
+        acciones: [
           IconButton(
-            tooltip: 'Simular nota de la unidad',
-            icon: const Icon(Icons.calculate_outlined),
-            onPressed: _mostrarSimulador,
+            icon: const Icon(Icons.flag_rounded),
+            tooltip: '¿Qué nota necesito?',
+            onPressed: _cargando ? null : _abrirSimulador,
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: 'Más opciones',
+            onPressed: () => mostrarOpciones(
+              context,
+              titulo: _nombre,
+              opciones: [
+                OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar unidad', onTap: _editarUnidad),
+                OpcionMenu(
+                  icono: Icons.delete_outline_rounded,
+                  texto: 'Eliminar unidad',
+                  onTap: _eliminarUnidad,
+                  destructiva: true,
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _guardando ? null : () => _mostrarFormulario(),
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar'),
-      ),
-      body: referencia == null
-          ? const Center(
-              child: Text('Inicia sesión para ver las evaluaciones.'),
-            )
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: referencia.snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text(
-                      'No se pudieron cargar los tipos de evaluación.',
-                    ),
-                  );
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final documentos = snapshot.data?.docs ?? [];
-                double total = 0;
-
-                for (final documento in documentos) {
-                  total += _numero(documento.data()['porcentaje']) ?? 0;
-                }
-
-                final porcentajeValido = (total - 100).abs() <= 0.1;
-
-                return Column(
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : _error
+              ? const Center(child: Text('Error al cargar los tipos de evaluación.'))
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 104),
                   children: [
-                    Card(
-                      margin: const EdgeInsets.all(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.pie_chart_outline, size: 32),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Porcentaje asignado',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${total.toStringAsFixed(1)}% '
-                                    'de 100%',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  LinearProgressIndicator(
-                                    value: (total / 100).clamp(0.0, 1.0),
-                                    color: porcentajeValido
-                                        ? Colors.green
-                                        : Colors.orange,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Icon(
-                              porcentajeValido
-                                  ? Icons.check_circle
-                                  : Icons.warning_amber_rounded,
-                              color: porcentajeValido
-                                  ? Colors.green
-                                  : Colors.orange,
-                            ),
-                          ],
-                        ),
-                      ),
+                    CardResultado(
+                      nota: notaUnidad,
+                      titulo: esParcial ? 'Nota parcial de la unidad' : 'Nota de la unidad',
+                      subtitulo: 'Vale ${FormatoNota.porcentaje(_porcentaje)}% del curso',
                     ),
-                    if (documentos.isEmpty)
-                      const Expanded(
-                        child: Center(
-                          child: Text(
-                            'Todavía no hay tipos de evaluación.\n'
-                            'Presiona "Agregar" para registrar uno.',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                    const SizedBox(height: 22),
+                    if (_tipos.isEmpty)
+                      EstadoVacio(
+                        icono: Icons.quiz_rounded,
+                        titulo: 'Agrega cómo te evalúan',
+                        texto: 'Registra los tipos de evaluación de la unidad (examen, laboratorio, '
+                            'proyecto...) con su peso, y luego sus notas.',
+                        textoBoton: 'Agregar tipo de evaluación',
+                        onPressed: _crearOEditarTipo,
+                        tip: 'Si un tipo tiene varias notas, Pondera las promedia antes de aplicar su peso.',
                       )
-                    else
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
-                          itemCount: documentos.length,
-                          itemBuilder: (context, index) {
-                            final documento = documentos[index];
-                            final datos = documento.data();
-                            final nombre =
-                                datos['nombre']?.toString() ?? 'Sin nombre';
-                            final porcentaje =
-                                _numero(datos['porcentaje']) ?? 0;
-
-                            return Card(
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  child: Text('${index + 1}'),
-                                ),
-                                title: Text(nombre),
-                                subtitle: Text(
-                                  'Peso: '
-                                  '${porcentaje.toStringAsFixed(1)}%',
-                                ),
-                                trailing: PopupMenuButton<String>(
-                                  onSelected: (opcion) {
-                                    if (opcion == 'editar') {
-                                      _mostrarFormulario(
-                                        id: documento.id,
-                                        nombre: nombre,
-                                        porcentaje: porcentaje,
-                                      );
-                                    } else if (opcion == 'eliminar') {
-                                      _eliminarTipo(documento.id, nombre);
-                                    }
-                                  },
-                                  itemBuilder: (context) => const [
-                                    PopupMenuItem(
-                                      value: 'editar',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.edit_outlined),
-                                          SizedBox(width: 8),
-                                          Text('Editar'),
-                                        ],
-                                      ),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'eliminar',
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.delete_outline,
-                                            color: Colors.red,
-                                          ),
-                                          SizedBox(width: 8),
-                                          Text('Eliminar'),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                    else ...[
+                      SeccionTitulo('Tipos de evaluación', trailing: LineaPesos(suma: total, compacta: true)),
+                      const SizedBox(height: 10),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: BarraPesos(pesos: [for (final t in _tipos) t.porcentaje]),
                       ),
+                      const SizedBox(height: 16),
+                      for (final tipo in _tipos) ...[
+                        GrupoTipoEvaluacion(
+                          key: ValueKey(tipo.id),
+                          tipo: tipo,
+                          notas: notas[tipo.id] ?? const [],
+                          promedio: CalculosEvaluaciones.calcularPromedioTipo(notas[tipo.id] ?? const []),
+                          expandido: _expandido == tipo.id,
+                          onToggle: () => setState(() => _expandido = _expandido == tipo.id ? null : tipo.id),
+                          onAgregar: () => _abrirHojaNota(tipoId: tipo.id),
+                          onEditarNota: (n) => _abrirHojaNota(tipoId: tipo.id, nota: n),
+                          onEliminarNota: (n) => _eliminarNota(tipo, n),
+                          onEditarTipo: () => _crearOEditarTipo(tipo: tipo),
+                          onEliminarTipo: () => _eliminarTipo(tipo),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      const SizedBox(height: 2),
+                      BotonPunteado(texto: 'Tipo de evaluación', onPressed: _crearOEditarTipo),
+                    ],
                   ],
-                );
-              },
+                ),
+      floatingActionButton: _tipos.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _abrirHojaNota(),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Nota'),
             ),
     );
   }
