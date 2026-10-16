@@ -20,6 +20,7 @@ import '../widgets/estado_vacio.dart';
 import '../widgets/linea_pesos.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_unidad.dart';
+import 'escanear_notas_screen.dart';
 import 'tipos_evaluacion_screen.dart';
 
 /// Pantalla 05 - Detalle de curso: nota del curso y sus unidades (H12 + H14).
@@ -202,6 +203,23 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
     }
   }
 
+  /// H19: agrega al curso las unidades que faltan escaneandolas (una foto por unidad).
+  Future<void> _escanearUnidades() async {
+    final guardado = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => EscanearNotasScreen(
+          cicloId: '',
+          cicloNombre: 'Curso',
+          cursoId: widget.cursoId,
+          cursoNombre: _nombre,
+          unidadesPrevias: _unidades.length,
+          pesoPrevio: _totalUnidades,
+        ),
+      ),
+    );
+    if (guardado != null) _actualizarCalculo();
+  }
+
   Future<void> _abrirUnidad(Unidad unidad) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -237,6 +255,11 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
         padre: 'Curso',
         titulo: _nombre,
         acciones: [
+          IconButton(
+            icon: const Icon(Icons.document_scanner_rounded),
+            tooltip: 'Escanear unidades',
+            onPressed: _escanearUnidades,
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert_rounded),
             tooltip: 'Más opciones',
@@ -281,6 +304,15 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
           textoBoton: 'Agregar primera unidad',
           onPressed: _crearOEditarUnidad,
           tip: 'Los pesos de las unidades deben sumar 100%.',
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _escanearUnidades,
+            icon: const Icon(Icons.document_scanner_rounded),
+            label: const Text('Escanear unidades'),
+          ),
         ),
       ];
 

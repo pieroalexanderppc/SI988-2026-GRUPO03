@@ -13,6 +13,7 @@ import '../widgets/dialogos.dart';
 import '../widgets/estado_vacio.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_curso.dart';
+import 'escanear_notas_screen.dart';
 import 'unidades_screen.dart';
 
 /// Pantalla 04 - Detalle de ciclo: promedio del ciclo y sus cursos (H11).
@@ -127,6 +128,16 @@ class _CursosScreenState extends State<CursosScreen> {
     }
   }
 
+  /// H19: registra un curso completo escaneando el reporte del portal.
+  Future<void> _escanearReporte() async {
+    final cursoId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => EscanearNotasScreen(cicloId: widget.cicloId, cicloNombre: widget.cicloNombre),
+      ),
+    );
+    if (cursoId != null) _recalcular();
+  }
+
   Future<void> _abrirCurso(Curso curso) async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => UnidadesScreen(cursoId: curso.id, cursoNombre: curso.nombre)),
@@ -146,6 +157,11 @@ class _CursosScreenState extends State<CursosScreen> {
         padre: 'Ciclo',
         titulo: widget.cicloNombre,
         acciones: [
+          IconButton(
+            icon: const Icon(Icons.document_scanner_rounded),
+            tooltip: 'Escanear reporte de notas',
+            onPressed: _escanearReporte,
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert_rounded),
             tooltip: 'Más opciones',
@@ -186,6 +202,15 @@ class _CursosScreenState extends State<CursosScreen> {
                       'Luego registra sus unidades y notas.',
                   textoBoton: 'Agregar primer curso',
                   onPressed: _crearOEditarCurso,
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _escanearReporte,
+                    icon: const Icon(Icons.document_scanner_rounded),
+                    label: const Text('Escanear reporte de notas'),
+                  ),
                 ),
               ],
             );
