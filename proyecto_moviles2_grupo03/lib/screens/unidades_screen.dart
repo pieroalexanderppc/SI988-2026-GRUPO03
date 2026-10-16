@@ -1,12 +1,31 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../models/curso.dart';
 import '../models/unidad.dart';
 import '../services/calculo_curso_service.dart';
 import '../services/calculos_multinivel.dart';
+import '../services/cursos_service.dart';
 import '../services/unidades_service.dart';
+import '../theme/app_theme.dart';
+import '../theme/estado_nota_colors.dart';
+import '../utils/formato_nota.dart';
+import '../widgets/app_bar_nivel.dart';
+import '../widgets/barra_pesos.dart';
+import '../widgets/card_resultado.dart';
+import '../widgets/dialogos.dart';
+import '../widgets/estado_vacio.dart';
+import '../widgets/linea_pesos.dart';
+import '../widgets/seccion_titulo.dart';
+import '../widgets/tarjeta_unidad.dart';
 import 'tipos_evaluacion_screen.dart';
 
+/// Pantalla 05 - Detalle de curso: nota del curso y sus unidades (H12 + H14).
+///
+/// El stream de unidades se abre una sola vez en [initState]; antes se creaba
+/// en build y cada recalculo reemplazaba la lista por el indicador de carga.
 class UnidadesScreen extends StatefulWidget {
   final String cursoId;
   final String cursoNombre;
@@ -23,641 +42,386 @@ class UnidadesScreen extends StatefulWidget {
 
 class _UnidadesScreenState extends State<UnidadesScreen> {
   final UnidadesService _service = UnidadesService();
+  final CursosService _cursosService = CursosService();
   final CalculoCursoService _calculoService = CalculoCursoService();
 
-  ResultadoCalculoCurso? _resultadoCalculo;
-  bool _cargandoCalculo = false;
+  late String _nombre = widget.cursoNombre;
+  String? _uid;
+  StreamSubscription<List<Unidad>>? _unidadesSub;
+  List<Unidad> _unidades = [];
+  bool _cargando = true;
+  bool _error = false;
+
+  ResultadoCalculoCurso? _resultado;
+  bool _calculando = false;
+  int _calculoActual = 0;
 
   @override
   void initState() {
     super.initState();
-    _actualizarCalculo();
+    _uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = _uid;
+    if (uid == null) return;
+    _unidadesSub = _service.obtenerUnidades(uid, widget.cursoId).listen(
+      (unidades) {
+        if (!mounted) return;
+        setState(() {
+          _unidades = unidades;
+          _cargando = false;
+          _error = false;
+        });
+        // Cualquier cambio en las unidades (crear, editar peso, borrar) recalcula.
+        _actualizarCalculo();
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _cargando = false;
+          _error = true;
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _unidadesSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _actualizarCalculo() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    if (mounted) {
-      setState(() => _cargandoCalculo = true);
-    }
-
+    final uid = _uid;
+    if (uid == null) return;
+    final id = ++_calculoActual;
+    setState(() => _calculando = true);
     try {
-      final resultado = await _calculoService.obtenerCalculoCurso(
-        user.uid,
-        widget.cursoId,
-      );
-      if (mounted) {
-        setState(() {
-          _resultadoCalculo = resultado;
-          _cargandoCalculo = false;
-        });
-      }
+      final resultado = await _calculoService.obtenerCalculoCurso(uid, widget.cursoId);
+      // Si mientras tanto empezo otro calculo, este resultado ya es viejo.
+      if (!mounted || id != _calculoActual) return;
+      setState(() => _resultado = resultado);
     } catch (_) {
-      if (mounted) {
-        setState(() => _cargandoCalculo = false);
-      }
+      // Se conserva el ultimo resultado valido.
+    } finally {
+      if (mounted && id == _calculoActual) setState(() => _calculando = false);
     }
+  }
+
+  void _mostrarMensaje(String texto) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(texto)));
+  }
+
+  double get _totalUnidades => _unidades.fold<double>(0, (s, u) => s + u.porcentaje);
+
+  // --- Curso ---
+
+  Future<void> _editarCurso() async {
+    final uid = _uid;
+    if (uid == null) return;
+    final nombre = await pedirNombre(
+      context,
+      titulo: 'Editar curso',
+      etiqueta: 'Nombre del curso',
+      hint: 'Ej. Soluciones Móviles II',
+      inicial: _nombre,
+      textoBoton: 'Guardar',
+    );
+    if (nombre == null) return;
+    try {
+      await _cursosService.actualizarCurso(uid, Curso(id: widget.cursoId, nombre: _nombre, cicloId: ''), nombre);
+      if (!mounted) return;
+      setState(() => _nombre = nombre);
+      _mostrarMensaje('Curso actualizado.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo guardar el curso.');
+    }
+  }
+
+  Future<void> _eliminarCurso() async {
+    final uid = _uid;
+    if (uid == null) return;
+    final ok = await confirmarEliminar(
+      context,
+      titulo: 'Eliminar curso',
+      mensaje: 'Se eliminará "$_nombre" con todas sus unidades y notas.',
+    );
+    if (!ok) return;
+    try {
+      await _cursosService.eliminarCurso(uid, widget.cursoId);
+      if (!mounted) return;
+      _mostrarMensaje('Curso eliminado.');
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo eliminar el curso.');
+    }
+  }
+
+  // --- Unidades ---
+
+  Future<void> _crearOEditarUnidad({Unidad? unidad}) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final r = await pedirNombreYPeso(
+      context,
+      titulo: unidad == null ? 'Nueva unidad' : 'Editar unidad',
+      etiquetaNombre: 'Nombre de la unidad',
+      hintNombre: 'Ej. Unidad ${_unidades.length + 1}',
+      inicialNombre: unidad?.nombre ?? '',
+      inicialPeso: unidad?.porcentaje,
+      pesoDisponible: 100 - _totalUnidades + (unidad?.porcentaje ?? 0),
+      textoBoton: unidad == null ? 'Crear' : 'Guardar',
+    );
+    if (r == null) return;
+    try {
+      if (unidad == null) {
+        await _service.crearUnidad(uid, widget.cursoId, r.nombre, r.peso);
+      } else {
+        await _service.actualizarUnidad(uid, widget.cursoId, unidad, r.nombre, r.peso);
+      }
+      if (mounted) _mostrarMensaje(unidad == null ? 'Unidad creada.' : 'Unidad actualizada.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo guardar la unidad.');
+    }
+  }
+
+  Future<void> _eliminarUnidad(Unidad unidad) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final ok = await confirmarEliminar(
+      context,
+      titulo: 'Eliminar unidad',
+      mensaje: 'Se eliminará "${unidad.nombre}" con todos sus tipos de evaluación y notas.',
+    );
+    if (!ok) return;
+    try {
+      await _service.eliminarUnidad(uid, widget.cursoId, unidad.id);
+      if (mounted) _mostrarMensaje('Unidad eliminada.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo eliminar la unidad.');
+    }
+  }
+
+  Future<void> _abrirUnidad(Unidad unidad) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TiposEvaluacionScreen(
+          cursoId: widget.cursoId,
+          cursoNombre: _nombre,
+          unidadId: unidad.id,
+          unidadNombre: unidad.nombre,
+          unidadPorcentaje: unidad.porcentaje,
+        ),
+      ),
+    );
+    // Al volver se recalcula con las notas nuevas o modificadas (H14).
+    _actualizarCalculo();
+  }
+
+  String _resumenUnidad(Unidad unidad) {
+    final cantidad = _resultado?.notasRegistradasPorUnidad[unidad.id] ?? 0;
+    if (cantidad == 0) return 'Sin notas todavía';
+    final notas = cantidad == 1 ? '1 nota' : '$cantidad notas';
+    final completa = _resultado?.unidadCompleta[unidad.id] ?? false;
+    return '${completa ? 'Completa' : 'En curso'} · $notas';
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      return const Scaffold(
-        body: Center(child: Text('Debes iniciar sesión.')),
-      );
+    if (_uid == null) {
+      return const Scaffold(body: Center(child: Text('Debes iniciar sesión.')));
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Unidades - ${widget.cursoNombre}'),
-        centerTitle: true,
-        actions: [
+      appBar: AppBarNivel(
+        padre: 'Curso',
+        titulo: _nombre,
+        acciones: [
           IconButton(
-            icon: _cargandoCalculo
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            tooltip: 'Recalcular promedio',
-            onPressed: _cargandoCalculo ? null : _actualizarCalculo,
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: 'Más opciones',
+            onPressed: () => mostrarOpciones(
+              context,
+              titulo: _nombre,
+              opciones: [
+                OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar curso', onTap: _editarCurso),
+                OpcionMenu(
+                  icono: Icons.delete_outline_rounded,
+                  texto: 'Eliminar curso',
+                  onTap: _eliminarCurso,
+                  destructiva: true,
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: StreamBuilder<List<Unidad>>(
-        stream: _service.obtenerUnidades(user.uid, widget.cursoId),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Center(
-              child: Text('Error al cargar las unidades.'),
-            );
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final unidades = snapshot.data ?? [];
-
-          final total = unidades.fold<double>(
-            0,
-            (suma, unidad) => suma + unidad.porcentaje,
-          );
-
-          final valido = unidades.isNotEmpty && (total - 100).abs() <= 0.1;
-
-          return RefreshIndicator(
-            onRefresh: _actualizarCalculo,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // 1. Tarjeta destacada de la Nota Final del Curso (H14)
-                _TarjetaNotaFinalCurso(
-                  resultado: _resultadoCalculo,
-                  cargando: _cargandoCalculo,
-                ),
-                const SizedBox(height: 12),
-
-                // 2. Indicador de suma de 100% de unidades (H12)
-                Card(
-                  child: ListTile(
-                    leading: Icon(
-                      valido ? Icons.check_circle : Icons.warning,
-                      color: valido ? Colors.green : Colors.red,
-                    ),
-                    title: Text(
-                      'Total unidades: ${total.toStringAsFixed(1)}%',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      valido
-                          ? 'Porcentajes correctos'
-                          : 'Los porcentajes de las unidades deben sumar 100%',
-                    ),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : _error
+              ? const Center(child: Text('Error al cargar las unidades.'))
+              : RefreshIndicator(
+                  onRefresh: _actualizarCalculo,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                    children: _unidades.isEmpty ? _contenidoVacio() : _contenido(context),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Título de la sección de unidades
-                Text(
-                  'Unidades del curso (${unidades.length})',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-
-                // 3. Lista de unidades
-                if (unidades.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32.0),
-                    child: Center(
-                      child: Text('Todavía no hay unidades registradas.'),
-                    ),
-                  )
-                else
-                  for (int index = 0; index < unidades.length; index++) ...[
-                    _buildUnidadItem(context, user.uid, unidades[index], index),
-                    const SizedBox(height: 8),
-                  ],
-                const SizedBox(height: 80),
-              ],
-            ),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await _mostrarFormulario(
-            context,
-            _service,
-            user.uid,
-            widget.cursoId,
-          );
-          _actualizarCalculo();
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Nueva unidad'),
-      ),
     );
   }
 
-  Widget _buildUnidadItem(
-    BuildContext context,
-    String uid,
-    Unidad unidad,
-    int index,
-  ) {
-    final notaUnidad = _resultadoCalculo?.notasPorUnidad[unidad.id];
-    final estaCompleta = _resultadoCalculo?.unidadCompleta[unidad.id] ?? false;
-
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Text('${index + 1}'),
+  List<Widget> _contenidoVacio() => [
+        const SizedBox(height: 16),
+        EstadoVacio(
+          icono: Icons.view_agenda_rounded,
+          titulo: 'Aún no hay unidades',
+          texto: 'Agrega las unidades del curso con su peso. Luego registra sus notas y '
+              'Pondera calcula la nota final.',
+          textoBoton: 'Agregar primera unidad',
+          onPressed: _crearOEditarUnidad,
+          tip: 'Los pesos de las unidades deben sumar 100%.',
         ),
-        title: Text(
-          unidad.nombre,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 2),
-            Text('Peso: ${unidad.porcentaje.toStringAsFixed(1)}%'),
-            const SizedBox(height: 2),
-            Text(
-              notaUnidad != null
-                  ? 'Nota: ${notaUnidad.toStringAsFixed(1)} / 20 ${estaCompleta ? "(completa)" : "(parcial)"}'
-                  : 'Nota: Sin notas registradas',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: notaUnidad == null
-                    ? Theme.of(context).colorScheme.onSurfaceVariant
-                    : (notaUnidad >= 10.5 ? Colors.green.shade700 : Colors.red.shade700),
-              ),
-            ),
-          ],
-        ),
-        isThreeLine: true,
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => TiposEvaluacionScreen(
-                cursoId: widget.cursoId,
-                cursoNombre: widget.cursoNombre,
-                unidadId: unidad.id,
-                unidadNombre: unidad.nombre,
-                unidadPorcentaje: unidad.porcentaje,
-              ),
-            ),
-          );
-          // Al volver de TiposEvaluacionScreen, actualizar el cálculo en tiempo real
-          _actualizarCalculo();
-        },
-        trailing: PopupMenuButton<String>(
-          onSelected: (opcion) async {
-            if (opcion == 'editar') {
-              await _mostrarFormulario(
-                context,
-                _service,
-                uid,
-                widget.cursoId,
-                unidad: unidad,
-              );
-              _actualizarCalculo();
-            } else if (opcion == 'eliminar') {
-              await _eliminarUnidad(
-                context,
-                _service,
-                uid,
-                widget.cursoId,
-                unidad,
-              );
-              _actualizarCalculo();
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(
-              value: 'editar',
-              child: Text('Editar'),
-            ),
-            PopupMenuItem(
-              value: 'eliminar',
-              child: Text('Eliminar'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      ];
 
-  static Future<void> _mostrarFormulario(
-    BuildContext context,
-    UnidadesService service,
-    String uid,
-    String cursoId, {
-    Unidad? unidad,
-  }) async {
-    final nombreController = TextEditingController(
-      text: unidad?.nombre ?? '',
-    );
-    final porcentajeController = TextEditingController(
-      text: unidad != null ? unidad.porcentaje.toString() : '',
-    );
+  List<Widget> _contenido(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final estado = EstadoNotaColors.of(context);
+    final resultado = _resultado;
+    final total = _totalUnidades;
+    final tonos = AppTheme.tonosPeso(Theme.of(context).brightness);
 
-    final formKey = GlobalKey<FormState>();
-
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(
-            unidad == null ? 'Nueva unidad' : 'Editar unidad',
-          ),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nombreController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre de la unidad',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) =>
-                      value == null || value.trim().isEmpty
-                          ? 'Escribe un nombre'
-                          : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: porcentajeController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Porcentaje',
-                    suffixText: '%',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    final numero = double.tryParse(
-                      (value ?? '').trim().replaceAll(',', '.'),
-                    );
-
-                    if (numero == null ||
-                        !numero.isFinite ||
-                        numero <= 0 ||
-                        numero > 100) {
-                      return 'Ingresa un valor mayor que 0 y hasta 100';
-                    }
-
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-
-                final nombre = nombreController.text.trim();
-                final porcentaje = double.parse(
-                  porcentajeController.text.trim().replaceAll(',', '.'),
-                );
-
-                try {
-                  if (unidad == null) {
-                    await service.crearUnidad(
-                      uid,
-                      cursoId,
-                      nombre,
-                      porcentaje,
-                    );
-                  } else {
-                    await service.actualizarUnidad(
-                      uid,
-                      cursoId,
-                      unidad,
-                      nombre,
-                      porcentaje,
-                    );
-                  }
-
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext);
-                  }
-
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          unidad == null
-                              ? 'Unidad creada correctamente.'
-                              : 'Unidad actualizada correctamente.',
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No se pudo guardar la unidad.'),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: Text(unidad == null ? 'Crear' : 'Guardar'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      nombreController.dispose();
-      porcentajeController.dispose();
-    }
-  }
-
-  static Future<void> _eliminarUnidad(
-    BuildContext context,
-    UnidadesService service,
-    String uid,
-    String cursoId,
-    Unidad unidad,
-  ) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Eliminar unidad'),
-        content: Text('¿Eliminar "${unidad.nombre}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true) return;
-
-    try {
-      await service.eliminarUnidad(uid, cursoId, unidad.id);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unidad eliminada correctamente.'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo eliminar la unidad.'),
-          ),
-        );
-      }
-    }
-  }
-}
-
-/// Tarjeta destacada superior que muestra la Nota Final del Curso (H14)
-class _TarjetaNotaFinalCurso extends StatelessWidget {
-  final ResultadoCalculoCurso? resultado;
-  final bool cargando;
-
-  const _TarjetaNotaFinalCurso({
-    required this.resultado,
-    required this.cargando,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    if (cargando && resultado == null) {
-      return Card(
-        color: colorScheme.surfaceContainerHigh,
-        child: const Padding(
-          padding: EdgeInsets.all(20.0),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: 12),
-                Text('Calculando promedio del curso...'),
-              ],
-            ),
-          ),
-        ),
-      );
+    final completo = resultado?.estado == EstadoCalculoCurso.completo;
+    final evaluado = FormatoNota.porcentaje(resultado?.porcentajeEvaluado ?? 0);
+    final String pie;
+    if (resultado == null) {
+      pie = 'Calculando la nota del curso…';
+    } else if (completo) {
+      pie = 'Curso completo · nota final sobre 20';
+    } else if (resultado.estado == EstadoCalculoCurso.sinDatos) {
+      pie = 'Registra notas en las unidades para ver tu promedio.';
+    } else {
+      pie = '$evaluado% del curso evaluado';
     }
 
-    if (resultado == null || resultado!.estado == EstadoCalculoCurso.sinDatos) {
-      return Card(
-        color: colorScheme.surfaceContainerHigh,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+    return [
+      CardResultadoExpandida(
+        nota: resultado?.notaActual,
+        titulo: completo ? 'Nota final del curso' : 'Promedio parcial',
+        pie: pie,
+      ),
+      // H14: si falta informacion se dice que falta, sin dar la nota como final.
+      if (resultado != null && !completo && resultado.estado != EstadoCalculoCurso.sinDatos) ...[
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(color: estado.avisoFondo, borderRadius: BorderRadius.circular(16)),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 12),
+              Icon(Icons.error_rounded, color: estado.onAvisoFondo, size: 20),
+              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Promedio final del curso',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      resultado?.mensajeEstado ??
-                          'Registra notas en tus unidades para calcular el promedio final.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  resultado.mensajeEstado,
+                  style: TextStyle(fontSize: 14, height: 1.35, color: estado.onAvisoFondo),
                 ),
               ),
             ],
           ),
         ),
-      );
-    }
-
-    // Caso 1: Cálculo Incompleto (Criterio 3 de H14)
-    if (resultado!.estado == EstadoCalculoCurso.incompleto) {
-      return Card(
-        color: Colors.amber.shade50,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: Colors.amber.shade300, width: 1.5),
+      ],
+      if (_calculando && resultado != null)
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: LinearProgressIndicator(minHeight: 2),
         ),
+      const SizedBox(height: 16),
+      Card(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.pending_actions, color: Colors.amber.shade900),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  const Expanded(
+                    child: Text('Peso de las unidades', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                  LineaPesos(suma: total, compacta: true),
+                ],
+              ),
+              const SizedBox(height: 12),
+              BarraPesos(pesos: [for (final u in _unidades) u.porcentaje]),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                children: [
+                  for (var i = 0; i < _unidades.length; i++)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Cálculo pendiente / incompleto',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.amber.shade900,
-                          ),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(color: tonos[i % tonos.length], shape: BoxShape.circle),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(width: 6),
                         Text(
-                          resultado!.mensajeEstado,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.brown.shade800,
-                          ),
+                          '${_unidades[i].nombre} ${FormatoNota.porcentaje(_unidades[i].porcentaje)}%',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
-                  ),
                 ],
               ),
-              if (resultado!.notaAcumulada != null) ...[
-                const SizedBox(height: 10),
-                const Divider(),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Nota acumulada parcial:',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.brown.shade800,
-                      ),
-                    ),
-                    Text(
-                      '${resultado!.notaAcumulada!.toStringAsFixed(1)} / 20',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.amber.shade900,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
             ],
           ),
         ),
-      );
-    }
-
-    // Caso 2: Cálculo Completo (Criterios 1 y 2 de H14)
-    final nota = resultado!.notaFinal!;
-    final aprobado = resultado!.esAprobado;
-
-    return Card(
-      color: colorScheme.surfaceContainerHigh,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Nota final del curso',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${nota.toStringAsFixed(1)} / 20',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    color: aprobado ? Colors.green.shade700 : Colors.red.shade700,
-                  ),
-                ),
-              ],
-            ),
-            Chip(
-              avatar: Icon(
-                aprobado ? Icons.check_circle : Icons.cancel,
-                size: 18,
-                color: Colors.white,
-              ),
-              backgroundColor: aprobado ? Colors.green.shade600 : Colors.red.shade600,
-              label: Text(
-                aprobado ? 'Aprobado' : 'Desaprobado',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
+      ),
+      const SizedBox(height: 20),
+      SeccionTitulo(
+        'Unidades',
+        trailing: TextButton.icon(
+          onPressed: _crearOEditarUnidad,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Unidad'),
         ),
       ),
-    );
+      const SizedBox(height: 6),
+      for (final unidad in _unidades) ...[
+        TarjetaUnidad(
+          key: ValueKey(unidad.id),
+          nombre: unidad.nombre,
+          peso: unidad.porcentaje,
+          nota: resultado?.promedioParcialPorUnidad[unidad.id],
+          resumen: _resumenUnidad(unidad),
+          onTap: () => _abrirUnidad(unidad),
+          onLongPress: () => mostrarOpciones(
+            context,
+            titulo: unidad.nombre,
+            opciones: [
+              OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar unidad', onTap: () => _crearOEditarUnidad(unidad: unidad)),
+              OpcionMenu(
+                icono: Icons.delete_outline_rounded,
+                texto: 'Eliminar unidad',
+                onTap: () => _eliminarUnidad(unidad),
+                destructiva: true,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          'Mantén presionada una unidad para editarla o eliminarla.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+        ),
+      ),
+    ];
   }
 }

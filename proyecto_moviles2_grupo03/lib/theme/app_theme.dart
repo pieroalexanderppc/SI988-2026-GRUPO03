@@ -48,6 +48,11 @@ class AppTheme {
     error: EstadoNotaColors.dark.desaprobado,
   );
 
+  /// Tonos de marca para los segmentos de peso, de mayor a menor (DESIGN.md 2.1).
+  static List<Color> tonosPeso(Brightness brillo) => brillo == Brightness.dark
+      ? const [Color(0xFFBDBAFF), Color(0xFF8F8AF0), Color(0xFF5F5AD0), Color(0xFF423DA8)]
+      : const [Color(0xFF3B36C4), Color(0xFF6E69E0), Color(0xFFA9A5F3), Color(0xFFCFCDFF)];
+
   static ThemeData get lightTheme => _build(_lightScheme, EstadoNotaColors.light);
 
   static ThemeData get darkTheme => _build(_darkScheme, EstadoNotaColors.dark);

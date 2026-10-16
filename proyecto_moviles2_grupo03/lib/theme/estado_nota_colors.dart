@@ -14,11 +14,16 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
     required this.aviso,
     required this.avisoFondo,
     required this.onAvisoFondo,
+    required this.pistaAprobado,
+    required this.pistaDesaprobado,
   });
 
   final Color aprobado, aprobadoFondo, onAprobadoFondo;
   final Color desaprobado, desaprobadoFondo, onDesaprobadoFondo;
   final Color aviso, avisoFondo, onAvisoFondo;
+
+  /// Pista (parte no rellena) de la EscalaNota segun el estado.
+  final Color pistaAprobado, pistaDesaprobado;
 
   static const light = EstadoNotaColors(
     aprobado: Color(0xFF157A45),
@@ -30,6 +35,8 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
     aviso: Color(0xFF8A5200),
     avisoFondo: Color(0xFFFFE7C2),
     onAvisoFondo: Color(0xFF4A2A00),
+    pistaAprobado: Color(0xFFB4E4C6),
+    pistaDesaprobado: Color(0xFFF2B8B1),
   );
 
   static const dark = EstadoNotaColors(
@@ -42,6 +49,8 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
     aviso: Color(0xFFF5B867),
     avisoFondo: Color(0xFF4A3000),
     onAvisoFondo: Color(0xFFFFE7C2),
+    pistaAprobado: Color(0xFF1E5537),
+    pistaDesaprobado: Color(0xFF6B2620),
   );
 
   /// Obtiene la extension del tema. Si el tema no la registra (por ejemplo
@@ -50,6 +59,13 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
     final theme = Theme.of(context);
     return theme.extension<EstadoNotaColors>() ??
         (theme.brightness == Brightness.dark ? dark : light);
+  }
+
+  /// Color de texto para una nota: verde si aprueba, rojo si no,
+  /// y [neutro] si no hay nota.
+  Color colorDeNota(double? nota, Color neutro, {double umbral = 10.5}) {
+    if (nota == null) return neutro;
+    return nota >= umbral ? aprobado : desaprobado;
   }
 
   @override
@@ -63,6 +79,8 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
     Color? aviso,
     Color? avisoFondo,
     Color? onAvisoFondo,
+    Color? pistaAprobado,
+    Color? pistaDesaprobado,
   }) {
     return EstadoNotaColors(
       aprobado: aprobado ?? this.aprobado,
@@ -74,6 +92,8 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
       aviso: aviso ?? this.aviso,
       avisoFondo: avisoFondo ?? this.avisoFondo,
       onAvisoFondo: onAvisoFondo ?? this.onAvisoFondo,
+      pistaAprobado: pistaAprobado ?? this.pistaAprobado,
+      pistaDesaprobado: pistaDesaprobado ?? this.pistaDesaprobado,
     );
   }
 
@@ -92,6 +112,8 @@ class EstadoNotaColors extends ThemeExtension<EstadoNotaColors> {
       aviso: Color.lerp(aviso, other.aviso, t)!,
       avisoFondo: Color.lerp(avisoFondo, other.avisoFondo, t)!,
       onAvisoFondo: Color.lerp(onAvisoFondo, other.onAvisoFondo, t)!,
+      pistaAprobado: Color.lerp(pistaAprobado, other.pistaAprobado, t)!,
+      pistaDesaprobado: Color.lerp(pistaDesaprobado, other.pistaDesaprobado, t)!,
     );
   }
 }
