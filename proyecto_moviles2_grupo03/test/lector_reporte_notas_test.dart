@@ -302,4 +302,27 @@ void main() {
       expect(r.unidades.single.pesoDudoso, isTrue);
     });
   });
+
+  group('LectorReporteNotas - recorte borroso', () {
+    final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_recorte_unidad_2.txt'));
+
+    test('Sin "%" en una fila, la nota no se toma como peso (columna aprendida)', () {
+      final c3 = r.unidades.single.criterios[2];
+      expect(c3.nota, 4);
+      expect(c3.peso, isNot(4));
+      expect(c3.pesoDudoso, isTrue);
+    });
+
+    test('Corrige palabras a las que el OCR les perdio el inicio ("amen" -> "Examen")', () {
+      expect(r.unidades.single.criterios[3].descripcion, 'Examen de unidad');
+      expect(r.unidades.single.criterios[0].descripcion, 'Actitudinal');
+    });
+
+    test('Todo lo leido con dudas queda marcado para revisar', () {
+      final cs = r.unidades.single.criterios;
+      expect(cs[0].pesoDudoso, isTrue);
+      expect(cs[0].notaDudosa, isTrue);
+      expect(cs[3].notaDudosa, isTrue);
+    });
+  });
 }

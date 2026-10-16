@@ -130,6 +130,16 @@ class LectorReporteNotas {
   static ReporteDetectado leer(List<PalabraOcr> palabras) {
     if (palabras.isEmpty) return const ReporteDetectado(unidades: []);
     final filas = _agruparEnFilas(palabras);
+
+    // Columna de pesos aprendida de la propia imagen: donde estan los "25 %".
+    // Sirve cuando no se leyo el encabezado y a una fila le falta el "%".
+    final xPesos = <double>[];
+    for (final fila in filas) {
+      final inicio = _anclaCriterio(fila);
+      if (inicio == null) continue;
+      xPesos.addAll(_clasificar(fila.sublist(inicio)).where((t) => t.tipo == _Tipo.porcentaje).map((t) => t.x));
+    }
+    final xPesoTipico = _mediana(xPesos);
     final anchoImagen = palabras.map((p) => p.derecha).reduce(math.max);
 
     final filasTexto = <String>[];
@@ -196,6 +206,7 @@ class LectorReporteNotas {
         u.criterios.add(_leerCriterio(
           fila.sublist(inicioCriterio),
           columnas,
+          xPesoTipico,
           'Evaluacion ${(u.criterios.length + 1).toString().padLeft(2, '0')}',
         ));
       }
@@ -478,7 +489,12 @@ class LectorReporteNotas {
         .firstOrNull;
   }
 
-  static CriterioDetectado _leerCriterio(List<PalabraOcr> fila, List<(_Columna, double)>? columnas, String nombre) {
+  static CriterioDetectado _leerCriterio(
+    List<PalabraOcr> fila,
+    List<(_Columna, double)>? columnas,
+    double? xPesoTipico,
+    String nombre,
+  ) {
     final tokens = _clasificar(fila);
 
     // Peso: el primer porcentaje; si el "%" no se leyo, el numero en la columna "Peso C.".
@@ -488,7 +504,16 @@ class LectorReporteNotas {
       peso = _enColumna(tokens, columnas, _Columna.pesoC);
       pesoDudoso = true;
     }
-    peso ??= tokens.where((t) => t.tipo == _Tipo.numero).firstOrNull;
+    if (peso == null && xPesoTipico != null) {
+      // Sin "%": solo es peso el numero que esta en la columna de pesos; uno mas a
+      // la derecha es la nota (evita tomar la nota "4" como peso).
+      final alto = fila.isEmpty ? 40.0 : fila.map((p) => p.alto).reduce(math.max);
+      peso = tokens
+          .where((t) => t.tipo == _Tipo.numero && (t.x - xPesoTipico).abs() <= alto * 2.5)
+          .firstOrNull;
+    } else {
+      peso ??= tokens.where((t) => t.tipo == _Tipo.numero).firstOrNull;
+    }
     if (peso != null && peso.tipo == _Tipo.numero) pesoDudoso = true;
 
     // Nota: un numero 0-20 que no sea el peso ni parte de una fecha.
@@ -568,8 +593,16 @@ class LectorReporteNotas {
   ];
 
   static String _corregirPalabra(String palabra) {
-    if (palabra.length < 5) return palabra;
+    if (palabra.length < 4) return palabra;
     final buscada = _normalizar(palabra);
+    // El OCR perdio las primeras letras: "amen" -> "Examen".
+    for (final v in _vocabulario) {
+      final nv = _normalizar(v);
+      if (buscada.length >= 4 && nv.length > buscada.length && nv.endsWith(buscada) && nv.length - buscada.length <= 2) {
+        return v;
+      }
+    }
+    if (palabra.length < 5) return palabra;
     // "Examende" -> "Examen de"
     if (buscada.length > 6 && buscada.endsWith('de')) {
       final sinDe = _corregirPalabra(palabra.substring(0, palabra.length - 2));
