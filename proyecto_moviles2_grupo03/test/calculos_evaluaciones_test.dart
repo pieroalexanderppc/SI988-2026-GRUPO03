@@ -121,4 +121,53 @@ void main() {
       expect(CalculosEvaluaciones.esAprobado(8.0), isFalse);
     });
   });
+
+  group('CalculosEvaluaciones - simulador de unidad (H15)', () {
+    final tipos = [
+      TipoEvaluacion(id: 'ex', nombre: 'Examen', porcentaje: 40),
+      TipoEvaluacion(id: 'lab', nombre: 'Laboratorio', porcentaje: 30),
+      TipoEvaluacion(id: 'pro', nombre: 'Proyecto', porcentaje: 30),
+    ];
+    // Laboratorio: promedio 15 -> aporta 4.5. Examen y Proyecto pendientes.
+    final notas = {
+      'lab': [
+        Nota(id: 'n1', valor: 14, tipoEvaluacionId: 'lab'),
+        Nota(id: 'n2', valor: 16, tipoEvaluacionId: 'lab'),
+      ],
+    };
+
+    test('Calcula la nota necesaria en la evaluacion pendiente', () {
+      final r = CalculosEvaluaciones.simularUnidad(
+        tipos: tipos, notasPorTipo: notas, tipoPendienteId: 'ex', objetivo: 10.5)!;
+      expect(r.notaNecesaria, closeTo(15.0, 0.001)); // (10.5 - 4.5) / 0.4
+      expect(r.maximoPosible, closeTo(18.5, 0.001)); // 4.5 + 0.7 * 20
+      expect(r.imposible, isFalse);
+      expect(r.yaAlcanzado, isFalse);
+    });
+
+    test('Detecta una meta imposible', () {
+      final r = CalculosEvaluaciones.simularUnidad(
+        tipos: tipos, notasPorTipo: notas, tipoPendienteId: 'ex', objetivo: 19)!;
+      expect(r.imposible, isTrue);
+    });
+
+    test('Una sola evaluacion no basta pero con las otras pendientes si', () {
+      final r = CalculosEvaluaciones.simularUnidad(
+        tipos: tipos, notasPorTipo: notas, tipoPendienteId: 'pro', objetivo: 12)!;
+      expect(r.notaNecesaria, greaterThan(20)); // (12 - 4.5) / 0.3 = 25
+      expect(r.necesitaOtrasPendientes, isTrue);
+    });
+
+    test('Retorna null si los pesos no suman 100% o el tipo ya tiene notas', () {
+      expect(
+        CalculosEvaluaciones.simularUnidad(
+            tipos: tipos.take(2).toList(), notasPorTipo: notas, tipoPendienteId: 'ex', objetivo: 12),
+        isNull,
+      );
+      expect(
+        CalculosEvaluaciones.simularUnidad(tipos: tipos, notasPorTipo: notas, tipoPendienteId: 'lab', objetivo: 12),
+        isNull,
+      );
+    });
+  });
 }
