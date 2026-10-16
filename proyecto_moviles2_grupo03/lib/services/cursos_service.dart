@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/curso.dart';
+import 'borrado_cascada.dart';
 
 class CursosService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -57,11 +58,8 @@ class CursosService {
     String uid,
     String cursoId,
   ) async {
-    await _firestore
-        .collection('usuarios')
-        .doc(uid)
-        .collection('cursos')
-        .doc(cursoId)
-        .delete();
+    await BorradoCascada.curso(
+      _firestore.collection('usuarios').doc(uid).collection('cursos').doc(cursoId),
+    );
   }
 }

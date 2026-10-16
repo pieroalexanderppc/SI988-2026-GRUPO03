@@ -107,6 +107,33 @@ void main() {
       expect(resultado.notaFinal, isNull, reason: 'No debe mostrar un cálculo final erróneo');
       expect(resultado.mensajeEstado, contains('Faltan notas en "Unidad 2"'));
       expect(resultado.notaAcumulada, 8.0, reason: 'Debe mostrar la nota acumulada de U1 (16 * 0.5)');
+      expect(resultado.porcentajeEvaluado, 50.0);
+      expect(resultado.promedioParcial, 16.0, reason: 'El promedio de lo evaluado es 16, no 8');
+      expect(resultado.notaActual, 16.0);
+    });
+
+    test('El promedio parcial de una unidad no cuenta como 0 los tipos sin notas', () {
+      final u1 = Unidad(id: 'u1', nombre: 'Unidad 1', cursoId: 'c1', porcentaje: 100.0);
+      final estU1 = EstructuraUnidad(
+        unidad: u1,
+        tipos: [
+          EstructuraTipoEvaluacion(
+            tipo: TipoEvaluacion(id: 't1', nombre: 'Examen', porcentaje: 40.0),
+            notas: [Nota(id: 'n1', valor: 13.0, tipoEvaluacionId: 't1')],
+          ),
+          EstructuraTipoEvaluacion(
+            tipo: TipoEvaluacion(id: 't2', nombre: 'Laboratorio', porcentaje: 60.0),
+            notas: [],
+          ),
+        ],
+      );
+
+      final resultado = CalculosMultinivel.calcular([estU1]);
+
+      expect(resultado.notasPorUnidad['u1'], closeTo(5.2, 0.001));
+      expect(resultado.promedioParcialPorUnidad['u1'], closeTo(13.0, 0.001));
+      expect(resultado.porcentajeEvaluado, 40.0);
+      expect(resultado.notasRegistradasPorUnidad['u1'], 1);
     });
 
     test('Retorna incompleto si las unidades no suman 100%', () {

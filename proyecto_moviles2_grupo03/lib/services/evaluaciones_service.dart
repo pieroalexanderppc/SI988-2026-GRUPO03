@@ -116,12 +116,14 @@ class EvaluacionesService {
     String unidadId,
     String tipoId,
     double valor, {
+    String nombre = '',
     DateTime? fecha,
   }) async {
     final ref = _notasRef(uid, cursoId, unidadId, tipoId).doc();
     final nota = Nota(
       id: ref.id,
       valor: valor,
+      nombre: nombre.trim(),
       fecha: fecha ?? DateTime.now(),
       tipoEvaluacionId: tipoId,
     );
@@ -135,9 +137,13 @@ class EvaluacionesService {
     String tipoId,
     String notaId,
     double valor, {
+    String? nombre,
     DateTime? fecha,
   }) async {
     final Map<String, dynamic> data = {'valor': valor};
+    if (nombre != null) {
+      data['nombre'] = nombre.trim();
+    }
     if (fecha != null) {
       data['fecha'] = Timestamp.fromDate(fecha);
     }
