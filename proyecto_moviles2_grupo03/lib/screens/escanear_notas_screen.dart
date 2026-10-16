@@ -424,6 +424,7 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     final estado = EstadoNotaColors.of(context);
     final resultado = _vistaPrevia();
     final errores = _errores;
+    final dudosos = _unidades.fold<int>(0, (a, u) => a + u.dudosos);
     final totalUnidades = _unidades.fold<double>(0, (a, u) => a + (_leer(u.peso.text) ?? 0));
     final bloqueado = _fase == _Fase.guardando;
 
@@ -448,6 +449,18 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
               color: estado.desaprobado,
               titulo: 'Corrige antes de guardar',
               lineas: errores.take(4).toList(),
+            )
+          else if (dudosos > 0)
+            _Aviso(
+              fondo: estado.avisoFondo,
+              texto: estado.onAvisoFondo,
+              icono: Icons.visibility_rounded,
+              color: estado.aviso,
+              titulo: dudosos == 1 ? '1 valor para revisar' : '$dudosos valores para revisar',
+              lineas: const [
+                'Los campos en ámbar se leyeron con dudas o se dedujeron para que los pesos sumen 100%. '
+                    'Compáralos con tu reporte; al editarlos se quita la marca.',
+              ],
             )
           else
             _Aviso(
@@ -539,15 +552,31 @@ class _CriterioEditable {
   final TextEditingController peso;
   final TextEditingController nota;
 
+  /// Marcas del lector: se apagan cuando el usuario edita el campo.
+  bool pesoDudoso;
+  bool notaDudosa;
+
   _CriterioEditable(CriterioDetectado c, VoidCallback onCambio)
       : nombre = c.nombre,
         descripcion = TextEditingController(text: c.descripcion),
         peso = TextEditingController(text: c.peso == null ? '' : FormatoNota.porcentaje(c.peso!)),
-        nota = TextEditingController(text: c.nota == null ? '' : _formatear(c.nota!)) {
+        nota = TextEditingController(text: c.nota == null ? '' : _formatear(c.nota!)),
+        pesoDudoso = c.pesoDudoso,
+        notaDudosa = c.notaDudosa {
+    final pesoInicial = peso.text;
+    final notaInicial = nota.text;
+    peso.addListener(() {
+      if (peso.text != pesoInicial) pesoDudoso = false;
+    });
+    nota.addListener(() {
+      if (nota.text != notaInicial) notaDudosa = false;
+    });
     for (final ctrl in [descripcion, peso, nota]) {
       ctrl.addListener(onCambio);
     }
   }
+
+  int get dudosos => (pesoDudoso ? 1 : 0) + (notaDudosa ? 1 : 0);
 
   static String _formatear(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
@@ -572,14 +601,30 @@ class _UnidadEditable {
   final TextEditingController peso;
   final List<_CriterioEditable> criterios;
   final VoidCallback onCambio;
+  bool pesoDudoso;
 
-  _UnidadEditable._(this.nombre, this.peso, this.criterios, this.onCambio);
+  _UnidadEditable._(this.nombre, this.peso, this.criterios, this.onCambio, this.pesoDudoso);
 
   factory _UnidadEditable.desde(UnidadDetectada u, VoidCallback onCambio) {
     final nombre = TextEditingController(text: u.nombre)..addListener(onCambio);
-    final peso = TextEditingController(text: u.peso == null ? '' : FormatoNota.porcentaje(u.peso!))..addListener(onCambio);
-    return _UnidadEditable._(nombre, peso, [for (final c in u.criterios) _CriterioEditable(c, onCambio)], onCambio);
+    final peso = TextEditingController(text: u.peso == null ? '' : FormatoNota.porcentaje(u.peso!));
+    final unidad = _UnidadEditable._(
+      nombre,
+      peso,
+      [for (final c in u.criterios) _CriterioEditable(c, onCambio)],
+      onCambio,
+      u.pesoDudoso,
+    );
+    final inicial = peso.text;
+    peso
+      ..addListener(() {
+        if (peso.text != inicial) unidad.pesoDudoso = false;
+      })
+      ..addListener(onCambio);
+    return unidad;
   }
+
+  int get dudosos => (pesoDudoso ? 1 : 0) + criterios.fold<int>(0, (a, c) => a + c.dudosos);
 
   void agregarCriterio() => criterios.add(_CriterioEditable(
         CriterioDetectado(nombre: 'Evaluacion ${(criterios.length + 1).toString().padLeft(2, '0')}'),
@@ -625,7 +670,7 @@ class _TarjetaUnidadEditable extends StatelessWidget {
               children: [
                 Expanded(child: _Campo(controller: unidad.nombre, hint: 'Unidad', negrita: true)),
                 const SizedBox(width: 8),
-                SizedBox(width: 84, child: _Campo(controller: unidad.peso, hint: 'Peso', sufijo: '%', numerico: true, rango: 100)),
+                SizedBox(width: 84, child: _Campo(controller: unidad.peso, hint: 'Peso', sufijo: '%', numerico: true, rango: 100, dudoso: unidad.pesoDudoso)),
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded),
                   color: scheme.onSurfaceVariant,
@@ -656,12 +701,26 @@ class _TarjetaUnidadEditable extends StatelessWidget {
                     const SizedBox(width: 6),
                     SizedBox(
                       width: 64,
-                      child: _Campo(controller: unidad.criterios[j].peso, hint: '%', sufijo: '%', numerico: true, rango: 100),
+                      child: _Campo(
+                        controller: unidad.criterios[j].peso,
+                        hint: '%',
+                        sufijo: '%',
+                        numerico: true,
+                        rango: 100,
+                        dudoso: unidad.criterios[j].pesoDudoso,
+                      ),
                     ),
                     const SizedBox(width: 6),
                     SizedBox(
                       width: 64,
-                      child: _Campo(controller: unidad.criterios[j].nota, hint: '—', numerico: true, rango: 20, esNota: true),
+                      child: _Campo(
+                        controller: unidad.criterios[j].nota,
+                        hint: '—',
+                        numerico: true,
+                        rango: 20,
+                        esNota: true,
+                        dudoso: unidad.criterios[j].notaDudosa,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
@@ -699,6 +758,9 @@ class _Campo extends StatelessWidget {
   final bool negrita;
   final bool esNota;
 
+  /// Valor que el lector dedujo o corrigio: se resalta en ambar para revisarlo.
+  final bool dudoso;
+
   /// Valor maximo permitido (100 para pesos, 20 para notas).
   final double? rango;
 
@@ -710,6 +772,7 @@ class _Campo extends StatelessWidget {
     this.negrita = false,
     this.esNota = false,
     this.rango,
+    this.dudoso = false,
   });
 
   @override
@@ -738,7 +801,11 @@ class _Campo extends StatelessWidget {
         isDense: true,
         suffixText: numerico && sufijo != null && texto.isNotEmpty ? sufijo : null,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        enabledBorder: invalido ? borde(scheme.error, 2) : borde(scheme.outline, 1),
+        filled: dudoso && !invalido ? true : null,
+        fillColor: dudoso && !invalido ? estado.avisoFondo : null,
+        enabledBorder: invalido
+            ? borde(scheme.error, 2)
+            : (dudoso ? borde(estado.aviso, 2) : borde(scheme.outline, 1)),
         focusedBorder: invalido ? borde(scheme.error, 2) : borde(scheme.primary, 2),
       ),
     );

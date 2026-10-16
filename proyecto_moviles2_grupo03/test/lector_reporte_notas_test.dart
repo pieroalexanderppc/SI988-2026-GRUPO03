@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proyecto_moviles2_grupo03/services/lector_reporte_notas.dart';
 
@@ -54,6 +57,17 @@ List<PalabraOcr> reporteTallerTesis() => [
       ...fila(643, [(153, 'Evaluacion 04'), (255, '20 %'), (482, 'Examen de unidad')]),
       ...fila(670, [(262, '100 %'), (348, '0.00')]),
       ...fila(712, [(225, 'El promedio actual del curso es: 4')]),
+    ];
+
+/// Carga una lectura real de ML Kit guardada con el registro de depuracion
+/// (formato "izq,arriba,der,abajo,angulo|texto").
+List<PalabraOcr> cargarLectura(String ruta) => [
+      for (final l in File(ruta).readAsLinesSync().where((l) => l.contains('|')))
+        () {
+          final i = l.indexOf('|');
+          final n = l.substring(0, i).split(',').map(double.parse).toList();
+          return PalabraOcr(l.substring(i + 1), n[0], n[1], n[2], n[3], angulo: n[4]);
+        }(),
     ];
 
 void main() {
@@ -118,9 +132,124 @@ void main() {
       expect(c.descripcion, 'Examen de unidad');
     });
 
+    test('Foto inclinada 5 grados: se endereza y lee igual', () {
+      final angulo = 5 * math.pi / 180;
+      final c = math.cos(angulo), s = math.sin(angulo);
+      (double, double) girar(double x, double y) => (x * c - y * s, x * s + y * c);
+      final inclinadas = [
+        for (final p in reporteTallerTesis())
+          PalabraOcr.desdeEsquinas(p.texto, [
+            girar(p.izquierda, p.arriba),
+            girar(p.derecha, p.arriba),
+            girar(p.derecha, p.abajo),
+            girar(p.izquierda, p.abajo),
+          ]),
+      ];
+      final r = LectorReporteNotas.leer(inclinadas);
+      expect(r.unidades.length, 3);
+      expect(r.unidades[0].criterios.map((c) => c.nota), [13, 13, 13, 18]);
+      expect(r.unidades[0].criterios.map((c) => c.peso), [10, 25, 35, 30]);
+      expect(r.unidades[2].criterios.map((c) => c.peso), [10, 25, 45, 20]);
+    });
+
+    test('Fechas y horas no se mezclan con la descripcion ni con la nota', () {
+      final r = LectorReporteNotas.leer([
+        ...fila(30, [(80, 'Unidad I'), (301, '30 %')]),
+        ...fila(60, [(153, 'Evaluacion 01'), (255, '15 %'), (387, 'Oct O2026 AM'), (487, 'Informes de laboratorio')]),
+        ...fila(90, [(153, 'Evaluacion 02'), (255, '85 %'), (348, '7'), (387, 'Oct 12 2026 11:24:00PM'), (487, 'Proyecto')]),
+      ]);
+      final cs = r.unidades.single.criterios;
+      expect(cs[0].descripcion, 'Informes de laboratorio');
+      expect(cs[0].nota, isNull);
+      expect(cs[1].descripcion, 'Proyecto');
+      expect(cs[1].nota, 7);
+    });
+
+    test('"%" leido como "96" y numero de criterio leido como "O1"', () {
+      final r = LectorReporteNotas.leer([
+        ...encabezado(0),
+        ...fila(30, [(80, 'Unidad I'), (301, '100 %')]),
+        ...fila(60, [(153, 'Evaluacion O1'), (255, '4096'), (348, '12'), (487, 'Examen')]),
+        ...fila(90, [(153, 'Evaluacion 02'), (255, '60 %'), (348, '14'), (487, 'Practicas')]),
+      ]);
+      final cs = r.unidades.single.criterios;
+      expect(cs.map((c) => c.peso), [40, 60]);
+      expect(cs[0].pesoDudoso, isTrue);
+      expect(cs.map((c) => c.nota), [12, 14]);
+    });
+
+    test('Deduce el unico peso faltante para llegar a 100 y lo marca dudoso', () {
+      final r = LectorReporteNotas.leer([
+        ...fila(30, [(80, 'Unidad I'), (301, '30 %')]),
+        ...fila(60, [(153, 'Evaluacion 01'), (255, '40 %'), (348, '15'), (487, 'Examen')]),
+        ...fila(90, [(153, 'Evaluacion 02'), (487, 'Laboratorio')]),
+        ...fila(130, [(80, 'Unidad II')]),
+        ...fila(160, [(153, 'Evaluacion 01'), (255, '100 %'), (487, 'Examen')]),
+      ]);
+      expect(r.unidades[0].criterios[1].peso, 60);
+      expect(r.unidades[0].criterios[1].pesoDudoso, isTrue);
+      expect(r.unidades[1].peso, 70);
+      expect(r.unidades[1].pesoDudoso, isTrue);
+    });
+
+    test('Numera las unidades en orden aunque el romano se lea mal', () {
+      final r = LectorReporteNotas.leer([
+        ...fila(30, [(80, 'Unidad l'), (301, '50 %')]),
+        ...fila(60, [(153, 'Evaluacion 01'), (255, '100 %'), (348, '16'), (487, 'Examen')]),
+        ...fila(90, [(80, 'Unidad Il'), (301, '50 %')]),
+        ...fila(120, [(153, 'Evaluacion 01'), (255, '100 %'), (487, 'Examen')]),
+      ]);
+      expect(r.unidades.map((u) => u.nombre), ['Unidad 1', 'Unidad 2']);
+    });
+
+    test('Ignora el texto del navegador y toma el titulo justo antes de la tabla', () {
+      final r = LectorReporteNotas.leer([
+        ...fila(0, [(10, 'https://portal.upt.edu.pe/notas')]),
+        ...fila(20, [(10, 'MENU PRINCIPAL')]),
+        ...fila(40, [(12, 'BASE DE DATOS II')]),
+        ...encabezado(70),
+        ...fila(100, [(80, 'Unidad I'), (301, '100 %')]),
+        ...fila(130, [(153, 'Evaluacion 01'), (255, '100 %'), (348, '17'), (487, 'Examen')]),
+      ]);
+      expect(r.curso, 'BASE DE DATOS II');
+      expect(r.unidades.single.criterios.single.nota, 17);
+    });
+
     test('Una imagen que no es un reporte devuelve un reporte vacio', () {
       final r = LectorReporteNotas.leer(fila(10, [(10, 'Hola mundo'), (200, 'esto no es una tabla')]));
       expect(r.vacio, isTrue);
+    });
+  });
+
+  group('LectorReporteNotas - lectura real (foto de pantalla con perspectiva)', () {
+    final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_foto_pantalla_1.txt'));
+
+    test('Lee el curso y se detiene antes del siguiente curso de la foto', () {
+      expect(r.curso, 'SOLUCIONES MOVILES I');
+      expect(r.unidades.length, 3);
+    });
+
+    test('Unidad 1 completa y sin dudas', () {
+      final u = r.unidades[0];
+      expect(u.peso, 25);
+      expect(u.criterios.map((c) => c.peso), [15, 25, 35, 25]);
+      expect(u.criterios.map((c) => c.nota), [15, 16, 14, 15]);
+      expect(u.criterios.map((c) => c.descripcion), ['Actitudinal', 'Cognitivo', 'Procedimental', 'Examen de unidad']);
+      expect(u.criterios.any((c) => c.pesoDudoso || c.notaDudosa), isFalse);
+    });
+
+    test('Unidad 2 con descripciones corregidas y notas pendientes', () {
+      final u = r.unidades[1];
+      expect(u.peso, 35);
+      expect(u.criterios.map((c) => c.descripcion), ['Actitudinal', 'Cognitivo', 'Procedimental', 'Examen de unidad']);
+      expect(u.criterios.every((c) => c.nota == null), isTrue);
+    });
+
+    test('Unidad 3 sin fila "Unidad III": se crea y su peso se deduce como dudoso', () {
+      final u = r.unidades[2];
+      expect(u.peso, 40);
+      expect(u.pesoDudoso, isTrue);
+      expect(u.criterios, isNotEmpty);
     });
   });
 }

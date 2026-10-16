@@ -35,8 +35,14 @@ class EscanerNotas {
         for (final bloque in texto.blocks)
           for (final linea in bloque.lines)
             for (final e in linea.elements)
-              PalabraOcr(e.text, e.boundingBox.left, e.boundingBox.top, e.boundingBox.right, e.boundingBox.bottom),
+              // Las esquinas permiten calcular la inclinacion y enderezar la foto.
+              e.cornerPoints.length == 4
+                  ? PalabraOcr.desdeEsquinas(e.text, [
+                      for (final p in e.cornerPoints) (p.x.toDouble(), p.y.toDouble()),
+                    ])
+                  : PalabraOcr(e.text, e.boundingBox.left, e.boundingBox.top, e.boundingBox.right, e.boundingBox.bottom),
       ];
+      _registrarParaDepurar(palabras);
       return LectorReporteNotas.leer(palabras);
     } finally {
       await reconocedor.close();
@@ -45,5 +51,17 @@ class EscanerNotas {
         await File(foto.path).delete();
       } catch (_) {}
     }
+  }
+
+  /// Solo en modo debug: imprime lo que leyo el OCR para convertir pruebas
+  /// reales en casos de test. No se ejecuta en la app publicada.
+  static void _registrarParaDepurar(List<PalabraOcr> palabras) {
+    if (!kDebugMode) return;
+    debugPrint('OCR_INICIO ${palabras.length} palabras');
+    for (final p in palabras) {
+      debugPrint('OCR ${p.izquierda.round()},${p.arriba.round()},${p.derecha.round()},${p.abajo.round()},'
+          '${p.angulo.toStringAsFixed(3)}|${p.texto}');
+    }
+    debugPrint('OCR_FIN');
   }
 }
