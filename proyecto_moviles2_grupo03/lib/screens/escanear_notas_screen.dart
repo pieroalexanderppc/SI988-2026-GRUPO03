@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -287,6 +289,20 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
 
   // --- Guardar ---
 
+  /// Tiempo maximo esperando la confirmacion del servidor. Firestore aplica los
+  /// cambios en el telefono al instante y los sube cuando hay conexion; sin este
+  /// limite la pantalla se quedaba en "Guardando..." si el servidor no responde.
+  static const _esperaServidor = Duration(seconds: 12);
+
+  void _avisarGuardadoPendiente() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 6),
+        content: Text('Guardado en este teléfono. El servidor no respondió; se subirá a tu cuenta cuando haya conexión.'),
+      ),
+    );
+  }
+
   Future<void> _guardar() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || _errores.isNotEmpty) return;
@@ -299,12 +315,16 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
           uid: uid,
           cursoId: widget.cursoId!,
           unidades: [for (final u in _unidades) u.aDetectada()],
-        );
+        ).timeout(_esperaServidor);
         if (!mounted) return;
         final n = _unidades.length;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(n == 1 ? 'Se agregó 1 unidad a $nombreCurso.' : 'Se agregaron $n unidades a $nombreCurso.')),
         );
+        Navigator.of(context).pop(widget.cursoId);
+      } on TimeoutException {
+        if (!mounted) return;
+        _avisarGuardadoPendiente();
         Navigator.of(context).pop(widget.cursoId);
       } catch (_) {
         if (!mounted) return;
@@ -317,7 +337,9 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     }
     try {
       // Criterio 7: si el curso ya existe en el ciclo, ofrecer actualizarlo.
-      final existente = await _importacion.buscarCursoExistente(uid, widget.cicloId, nombreCurso);
+      final existente = await _importacion
+          .buscarCursoExistente(uid, widget.cicloId, nombreCurso)
+          .timeout(_esperaServidor, onTimeout: () => null);
       String? reemplazarId;
       if (existente != null) {
         if (!mounted) return;
@@ -335,13 +357,17 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
         nombreCurso: nombreCurso,
         unidades: [for (final u in _unidades) u.aDetectada()],
         reemplazarCursoId: reemplazarId,
-      );
+      ).timeout(_esperaServidor);
       if (!mounted) return;
       final notas = _unidades.fold<int>(0, (a, u) => a + u.criterios.where((c) => c.nota.text.trim().isNotEmpty).length);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$nombreCurso guardado · $notas ${notas == 1 ? 'nota' : 'notas'} registradas.')),
       );
       Navigator.of(context).pop(cursoId);
+    } on TimeoutException {
+      if (!mounted) return;
+      _avisarGuardadoPendiente();
+      Navigator.of(context).pop('');
     } catch (_) {
       if (!mounted) return;
       setState(() => _fase = _Fase.revision);
