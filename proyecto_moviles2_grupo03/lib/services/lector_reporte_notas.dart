@@ -540,8 +540,13 @@ class LectorReporteNotas {
     }
 
     // Descripcion: las palabras que quedan (sin meses ni fechas).
-    final descripcion =
+    var descripcion =
         tokens.where((t) => t.tipo == _Tipo.palabra).map((t) => _corregirPalabra(t.texto)).join(' ').trim();
+    // Por contexto: despues de "Examen de" va "unidad" ("Examen de unHdd").
+    final examenDe = RegExp(r'^(Examen de) (\S+)$').firstMatch(descripcion);
+    if (examenDe != null && _distancia(_normalizar(examenDe.group(2)!), 'unidad') <= 3) {
+      descripcion = '${examenDe.group(1)} unidad';
+    }
 
     return CriterioDetectado(
       nombre: nombre,

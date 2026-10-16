@@ -325,4 +325,17 @@ void main() {
       expect(cs[3].notaDudosa, isTrue);
     });
   });
+
+  group('LectorReporteNotas - recorte nitido', () {
+    test('Lee la unidad completa sin dudas y corrige "Examen de unHdd" por contexto', () {
+      final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_recorte_nitido.txt'));
+      expect(r.curso, 'SOLUCIONES MOVILES II');
+      final u = r.unidades.single;
+      expect(u.peso, 25);
+      expect(u.criterios.map((c) => c.peso), [15, 25, 35, 25]);
+      expect(u.criterios.map((c) => c.nota), [15, 16, 14, 15]);
+      expect(u.criterios.last.descripcion, 'Examen de unidad');
+      expect(r.cantidadDudosos, 0);
+    });
+  });
 }
