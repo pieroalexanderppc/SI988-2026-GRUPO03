@@ -280,4 +280,26 @@ void main() {
       expect(r.unidades[2].criterios.any((c) => c.descripcion == 'In'), isFalse);
     });
   });
+
+  group('LectorReporteNotas - imagen recortada a una unidad', () {
+    final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_recorte_unidad_1.txt'));
+
+    test('Separa la nota pegada a la fecha ("5oct", "5Oct5") de la descripcion', () {
+      final cs = r.unidades.single.criterios;
+      expect(cs.map((c) => c.descripcion), ['Actitudinal', 'Cognitivo', 'Procedimental', 'Examen de unidad']);
+      expect(cs.map((c) => c.peso), [15, 25, 35, 25]);
+    });
+
+    test('Notas con digito perdido quedan para revisar', () {
+      final cs = r.unidades.single.criterios;
+      expect(cs[0].notaDudosa, isTrue);
+      expect(cs[2].notaDudosa, isTrue);
+      expect(cs[3].notaDudosa, isTrue);
+    });
+
+    test('Con una sola unidad no se asume que pesa 100%', () {
+      expect(r.unidades.single.peso, isNull);
+      expect(r.unidades.single.pesoDudoso, isTrue);
+    });
+  });
 }

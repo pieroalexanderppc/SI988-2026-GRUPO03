@@ -376,6 +376,27 @@ class LectorReporteNotas {
       }
     }
 
+    // "15Oct" o "5Oct15": la nota quedo pegada a la fecha; se separan.
+    final reMesPegado = RegExp(r'^(\d{1,2}(?:[.,]\d)?)?([A-Za-z]{3}\.?)(\d{1,2})?$');
+    for (var i = 0; i < palabras.length; i++) {
+      final p = palabras[i];
+      final m = reMesPegado.firstMatch(p.texto.trim().replaceAllMapped(RegExp(r'(?<=\D)0|0(?=\D)'), (_) => 'o'));
+      if (m == null || (m.group(1) == null && m.group(3) == null)) continue;
+      if (!_meses.contains(_normalizar(m.group(2)!).replaceAll('.', ''))) continue;
+      final partes = [?m.group(1), m.group(2)!, ?m.group(3)];
+      final ancho = p.ancho / partes.join().length;
+      var x = p.izquierda;
+      final nuevas = <PalabraOcr>[];
+      for (final parte in partes) {
+        nuevas.add(PalabraOcr(parte, x, p.arriba, x + ancho * parte.length, p.abajo));
+        x += ancho * parte.length;
+      }
+      palabras
+        ..removeAt(i)
+        ..insertAll(i, nuevas);
+      i += nuevas.length - 1;
+    }
+
     final tokens = <_Token>[];
     var restoFecha = 0;
     for (var i = 0; i < palabras.length; i++) {
@@ -489,7 +510,7 @@ class LectorReporteNotas {
 
     // Una nota de un solo digito con caja muy ancha o muy angosta suele ser un
     // "15" o "14" al que el OCR le perdio el "1": se marca para revisarla.
-    if (nota != null && _limpiarNumero(nota.texto).length == 1 && (nota.proporcion > 0.85 || nota.proporcion < 0.35)) {
+    if (nota != null && _limpiarNumero(nota.texto).length == 1 && (nota.proporcion > 0.85 || nota.proporcion < 0.4)) {
       notaDudosa = true;
     }
 
@@ -519,10 +540,13 @@ class LectorReporteNotas {
       if (resto > 0 && resto <= 100) escribir(faltan.single, resto);
     }
 
-    completar<UnidadDetectada>(unidades, (u) => u.peso, (u, v) {
-      u.peso = v;
-      u.pesoDudoso = true;
-    });
+    // Con una sola unidad no se deduce su peso: puede ser una foto de una parte del curso.
+    if (unidades.length >= 2) {
+      completar<UnidadDetectada>(unidades, (u) => u.peso, (u, v) {
+        u.peso = v;
+        u.pesoDudoso = true;
+      });
+    }
     for (final u in unidades) {
       completar<CriterioDetectado>(u.criterios, (c) => c.peso, (c, v) {
         c.peso = v;
