@@ -338,4 +338,17 @@ void main() {
       expect(r.cantidadDudosos, 0);
     });
   });
+
+  group('LectorReporteNotas - captura de pantalla pequena (letras de 8 px)', () {
+    test('Lee curso, unidad, pesos, notas y descripciones sin dudas', () {
+      final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_captura_pequena.txt'));
+      expect(r.curso, 'sOLUCIONES MÓVILES I');
+      final u = r.unidades.single;
+      expect(u.peso, 25);
+      expect(u.criterios.map((c) => c.peso), [15, 25, 35, 25]);
+      expect(u.criterios.map((c) => c.nota), [15, 16, 14, 15]);
+      expect(u.criterios.map((c) => c.descripcion), ['Actitudinal', 'Cognitivo', 'Procedimental', 'Examen de unidad']);
+      expect(r.cantidadDudosos, 0);
+    });
+  });
 }
