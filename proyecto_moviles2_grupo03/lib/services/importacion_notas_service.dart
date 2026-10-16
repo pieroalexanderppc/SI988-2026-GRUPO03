@@ -61,7 +61,28 @@ class ImportacionNotasService {
 
     final batch = _firestore.batch();
     batch.set(cursoRef, {'nombre': nombreCurso.trim(), 'cicloId': cicloId}, SetOptions(merge: true));
+    _agregarAlLote(batch, cursoRef, unidades);
+    await batch.commit();
+    return cursoRef.id;
+  }
 
+  /// Agrega unidades escaneadas a un curso existente, sin tocar las que ya tiene
+  /// (escaneo por partes: una foto por unidad).
+  Future<void> agregarUnidades({
+    required String uid,
+    required String cursoId,
+    required List<UnidadDetectada> unidades,
+  }) async {
+    final batch = _firestore.batch();
+    _agregarAlLote(batch, _cursosRef(uid).doc(cursoId), unidades);
+    await batch.commit();
+  }
+
+  void _agregarAlLote(
+    WriteBatch batch,
+    DocumentReference<Map<String, dynamic>> cursoRef,
+    List<UnidadDetectada> unidades,
+  ) {
     final ahora = DateTime.now();
     for (final unidad in unidades) {
       final unidadRef = cursoRef.collection('unidades').doc();
@@ -90,9 +111,6 @@ class ImportacionNotasService {
         }
       }
     }
-
-    await batch.commit();
-    return cursoRef.id;
   }
 
   String _idAleatorio() => _firestore.collection('_').doc().id;

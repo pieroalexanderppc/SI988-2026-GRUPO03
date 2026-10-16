@@ -23,11 +23,31 @@ import '../widgets/seccion_titulo.dart';
 /// Flujo: instrucciones -> foto o galeria -> lectura en el dispositivo ->
 /// vista previa editable -> guardar. Nada se guarda sin confirmar.
 /// Devuelve el id del curso guardado (o null si se cancela).
+///
+/// Se puede escanear por partes (una foto por unidad): en la vista previa
+/// "Escanear otra parte" agrega mas unidades, y desde un curso ya creado
+/// ([cursoId] distinto de null) las unidades escaneadas se agregan al final.
 class EscanearNotasScreen extends StatefulWidget {
   final String cicloId;
   final String cicloNombre;
 
-  const EscanearNotasScreen({super.key, required this.cicloId, required this.cicloNombre});
+  /// Curso existente al que se agregan unidades (null = crear un curso nuevo).
+  final String? cursoId;
+  final String? cursoNombre;
+
+  /// Unidades y peso que el curso existente ya tiene.
+  final int unidadesPrevias;
+  final double pesoPrevio;
+
+  const EscanearNotasScreen({
+    super.key,
+    required this.cicloId,
+    required this.cicloNombre,
+    this.cursoId,
+    this.cursoNombre,
+    this.unidadesPrevias = 0,
+    this.pesoPrevio = 0,
+  });
 
   @override
   State<EscanearNotasScreen> createState() => _EscanearNotasScreenState();
@@ -45,6 +65,8 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
   final _cursoCtrl = TextEditingController();
   final List<_UnidadEditable> _unidades = [];
 
+  bool get _agregaACurso => widget.cursoId != null;
+
   @override
   void dispose() {
     _cursoCtrl.dispose();
@@ -58,44 +80,118 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
 
   // --- Lectura ---
 
-  Future<void> _escanear(OrigenImagen origen) async {
+  /// Escanea una imagen. Con [agregarParte] las unidades leidas se suman a las
+  /// de la vista previa (escaneo por partes); si no, la reemplazan.
+  Future<void> _escanear(OrigenImagen origen, {bool agregarParte = false}) async {
+    final faseAnterior = _fase;
     setState(() {
       _fase = _Fase.leyendo;
       _error = null;
     });
+
+    void volver(String? error) {
+      if (!mounted) return;
+      setState(() {
+        _fase = agregarParte ? faseAnterior : _Fase.inicio;
+        _error = agregarParte ? null : error;
+      });
+      if (agregarParte && error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      }
+    }
+
     try {
-      final reporte = await _escaner.escanear(origen);
+      final scheme = Theme.of(context).colorScheme;
+      final reporte = await _escaner.escanear(
+        origen,
+        colorPrincipal: scheme.primary,
+        colorSobrePrincipal: scheme.onPrimary,
+      );
       if (!mounted) return;
       if (reporte == null) {
-        setState(() => _fase = _Fase.inicio); // cancelo la camara o la galeria
+        volver(null); // cancelo la camara, la galeria o el recorte
         return;
       }
       if (reporte.vacio) {
-        setState(() {
-          _fase = _Fase.inicio;
-          _error = 'No encontramos una tabla de notas en la imagen. Asegúrate de que se vean '
-              'los encabezados (Unidad, Criterio, Peso C., Peso U., Nota) y que la foto esté recta y nítida.';
-        });
         HapticFeedback.mediumImpact();
+        volver('No encontramos una tabla de notas en la imagen. Recorta solo la tabla y asegúrate de que '
+            'se vean las filas "Evaluacion 01, 02…" con sus pesos.');
         return;
       }
-      _cargarReporte(reporte);
+      if (agregarParte) {
+        _agregarParte(reporte);
+      } else {
+        _cargarReporte(reporte);
+      }
       HapticFeedback.lightImpact();
     } on PlatformException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _fase = _Fase.inicio;
-        _error = e.code == 'camera_access_denied' || e.code == 'photo_access_denied'
-            ? 'Pondera necesita permiso para usar la cámara o la galería. Actívalo en los ajustes del teléfono.'
-            : 'No pudimos leer la imagen. Inténtalo de nuevo.';
-      });
+      volver(e.code == 'camera_access_denied' || e.code == 'photo_access_denied'
+          ? 'Pondera necesita permiso para usar la cámara o la galería. Actívalo en los ajustes del teléfono.'
+          : 'No pudimos leer la imagen. Inténtalo de nuevo.');
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _fase = _Fase.inicio;
-        _error = 'No pudimos leer la imagen. Inténtalo de nuevo.';
-      });
+      volver('No pudimos leer la imagen. Inténtalo de nuevo.');
     }
+  }
+
+  /// Suma las unidades de otra foto a la vista previa, continuando la numeracion.
+  void _agregarParte(ReporteDetectado reporte) {
+    if (_cursoCtrl.text.trim().isEmpty && reporte.curso != null) {
+      _cursoCtrl.text = _formatearCurso(reporte.curso!);
+    }
+    setState(() {
+      _unidades.addAll(reporte.unidades.map((u) => _UnidadEditable.desde(u, _refrescar)));
+      _renumerar();
+      _fase = _Fase.revision;
+    });
+    final n = reporte.unidades.length;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(n == 1 ? 'Se agregó 1 unidad.' : 'Se agregaron $n unidades.')),
+    );
+  }
+
+  /// Numera "Unidad N" en orden, contando las que el curso ya tiene.
+  /// Respeta los nombres que el usuario escribio a mano.
+  void _renumerar() {
+    for (var i = 0; i < _unidades.length; i++) {
+      final ctrl = _unidades[i].nombre;
+      if (ctrl.text.trim().isEmpty || RegExp(r'^Unidad \d+$').hasMatch(ctrl.text.trim())) {
+        ctrl.text = 'Unidad ${widget.unidadesPrevias + i + 1}';
+      }
+    }
+  }
+
+  /// Elige camara o galeria para escanear otra parte.
+  Future<void> _escanearOtraParte() async {
+    final origen = await showModalBottomSheet<OrigenImagen>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                'Escanea la siguiente unidad. Recorta solo su tabla para una mejor lectura.',
+                style: TextStyle(fontSize: 15),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_rounded),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.pop(sheetContext, OrigenImagen.camara),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Elegir captura o foto'),
+              onTap: () => Navigator.pop(sheetContext, OrigenImagen.galeria),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (origen != null) await _escanear(origen, agregarParte: true);
   }
 
   void _cargarReporte(ReporteDetectado reporte) {
@@ -108,7 +204,8 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     _unidades
       ..clear()
       ..addAll(reporte.unidades.map((u) => _UnidadEditable.desde(u, _refrescar)));
-    _cursoCtrl.text = _formatearCurso(reporte.curso ?? '');
+    _renumerar();
+    _cursoCtrl.text = _agregaACurso ? (widget.cursoNombre ?? '') : _formatearCurso(reporte.curso ?? '');
     setState(() => _fase = _Fase.revision);
   }
 
@@ -133,7 +230,7 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
 
   List<String> get _errores {
     final errores = <String>[];
-    if (_cursoCtrl.text.trim().isEmpty) errores.add('Escribe el nombre del curso.');
+    if (!_agregaACurso && _cursoCtrl.text.trim().isEmpty) errores.add('Escribe el nombre del curso.');
     if (_unidades.isEmpty) errores.add('Agrega al menos una unidad.');
     for (final u in _unidades) {
       final nombre = u.nombre.text.trim().isEmpty ? 'Una unidad' : u.nombre.text.trim();
@@ -196,6 +293,28 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     final nombreCurso = _cursoCtrl.text.trim();
 
     setState(() => _fase = _Fase.guardando);
+    if (_agregaACurso) {
+      try {
+        await _importacion.agregarUnidades(
+          uid: uid,
+          cursoId: widget.cursoId!,
+          unidades: [for (final u in _unidades) u.aDetectada()],
+        );
+        if (!mounted) return;
+        final n = _unidades.length;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(n == 1 ? 'Se agregó 1 unidad a $nombreCurso.' : 'Se agregaron $n unidades a $nombreCurso.')),
+        );
+        Navigator.of(context).pop(widget.cursoId);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _fase = _Fase.revision);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.')),
+        );
+      }
+      return;
+    }
     try {
       // Criterio 7: si el curso ya existe en el ciclo, ofrecer actualizarlo.
       final existente = await _importacion.buscarCursoExistente(uid, widget.cicloId, nombreCurso);
@@ -266,8 +385,8 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
       },
       child: Scaffold(
         appBar: AppBarNivel(
-          padre: widget.cicloNombre,
-          titulo: enRevision ? 'Revisa las notas' : 'Escanear notas',
+          padre: _agregaACurso ? (widget.cursoNombre ?? widget.cicloNombre) : widget.cicloNombre,
+          titulo: enRevision ? 'Revisa las notas' : (_agregaACurso ? 'Escanear unidades' : 'Escanear notas'),
           acciones: [
             if (enRevision)
               IconButton(
@@ -386,7 +505,8 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
         const SizedBox(height: 22),
         const SeccionTitulo('Para una buena lectura'),
         const SizedBox(height: 12),
-        consejo(Icons.crop_free_rounded, 'Encuadra solo la tabla de un curso, de frente y sin inclinarla.'),
+        consejo(Icons.crop_rounded, 'Después de la foto podrás recortarla: deja solo la tabla. Puedes ir unidad por unidad.'),
+        consejo(Icons.crop_free_rounded, 'Toma la foto de frente y sin inclinar el teléfono.'),
         consejo(Icons.wb_sunny_rounded, 'Usa buena luz y evita reflejos en la pantalla.'),
         consejo(Icons.table_rows_rounded, 'Que se vean los encabezados: Unidad, Criterio, Peso C., Peso U. y Nota.'),
         consejo(Icons.screenshot_rounded, 'Una captura de pantalla del portal da el mejor resultado.'),
@@ -425,7 +545,8 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     final resultado = _vistaPrevia();
     final errores = _errores;
     final dudosos = _unidades.fold<int>(0, (a, u) => a + u.dudosos);
-    final totalUnidades = _unidades.fold<double>(0, (a, u) => a + (_leer(u.peso.text) ?? 0));
+    final totalUnidades =
+        widget.pesoPrevio + _unidades.fold<double>(0, (a, u) => a + (_leer(u.peso.text) ?? 0));
     final bloqueado = _fase == _Fase.guardando;
 
     return AbsorbPointer(
@@ -472,16 +593,30 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
               lineas: const ['Toca cualquier valor para corregirlo. Las notas vacías quedan como pendientes.'],
             ),
           const SizedBox(height: 18),
+          if (_agregaACurso)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                widget.unidadesPrevias == 0
+                    ? 'Se agregarán a ${widget.cursoNombre}.'
+                    : '${widget.cursoNombre} ya tiene ${widget.unidadesPrevias} '
+                        '${widget.unidadesPrevias == 1 ? 'unidad' : 'unidades'} '
+                        '(${FormatoNota.porcentaje(widget.pesoPrevio)}%). Estas se agregan al final.',
+                style: TextStyle(fontSize: 15, color: scheme.onSurfaceVariant),
+              ),
+            )
+          else ...[
           const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('Curso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          ),
-          TextField(
-            controller: _cursoCtrl,
-            onChanged: (_) => _refrescar(),
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(prefixIcon: Icon(Icons.menu_book_rounded), hintText: 'Nombre del curso'),
-          ),
+              padding: EdgeInsets.only(left: 4, bottom: 8),
+              child: Text('Curso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            ),
+            TextField(
+              controller: _cursoCtrl,
+              onChanged: (_) => _refrescar(),
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.menu_book_rounded), hintText: 'Nombre del curso'),
+            ),
+          ],
           const SizedBox(height: 22),
           SeccionTitulo(
             'Unidades · ${_unidades.length}',
@@ -501,11 +636,20 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
             ),
             const SizedBox(height: 12),
           ],
+          OutlinedButton.icon(
+            onPressed: _escanearOtraParte,
+            icon: const Icon(Icons.document_scanner_rounded),
+            label: const Text('Escanear otra parte'),
+          ),
+          const SizedBox(height: 10),
           BotonPunteado(
-            texto: 'Agregar unidad',
+            texto: 'Agregar unidad a mano',
             onPressed: () => setState(
               () => _unidades.add(_UnidadEditable.desde(
-                UnidadDetectada(nombre: 'Unidad ${_unidades.length + 1}', criterios: [CriterioDetectado(nombre: 'Evaluacion 01')]),
+                UnidadDetectada(
+                  nombre: 'Unidad ${widget.unidadesPrevias + _unidades.length + 1}',
+                  criterios: [CriterioDetectado(nombre: 'Evaluacion 01')],
+                ),
                 _refrescar,
               )),
             ),

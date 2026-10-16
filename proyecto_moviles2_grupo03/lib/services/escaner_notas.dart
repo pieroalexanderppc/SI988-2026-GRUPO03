@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Color;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'lector_reporte_notas.dart';
@@ -9,28 +11,60 @@ import 'lector_reporte_notas.dart';
 /// Origen de la imagen del reporte.
 enum OrigenImagen { camara, galeria }
 
-/// H19 - Toma o elige la foto del reporte y la lee con ML Kit en el dispositivo.
+/// H19 - Toma o elige la foto del reporte, deja recortarla y la lee con ML Kit
+/// en el dispositivo.
 ///
-/// La imagen no sale del telefono ni se guarda: el archivo temporal se borra
-/// apenas termina el reconocimiento.
+/// Recortar solo la tabla (por ejemplo una unidad) quita ruido y agranda el
+/// texto, lo que mejora mucho la lectura. La imagen no sale del telefono ni se
+/// guarda: los archivos temporales se borran apenas termina el reconocimiento.
 class EscanerNotas {
   final ImagePicker _picker = ImagePicker();
+  final ImageCropper _recortador = ImageCropper();
 
   /// ML Kit solo funciona en Android e iOS.
   static bool get disponible =>
       !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
-  /// Devuelve `null` si el usuario cancelo la camara o la galeria.
-  Future<ReporteDetectado?> escanear(OrigenImagen origen) async {
+  /// Devuelve `null` si el usuario cancelo la camara, la galeria o el recorte.
+  /// [colorPrincipal] y [colorSobrePrincipal] pintan la barra del editor de recorte.
+  Future<ReporteDetectado?> escanear(
+    OrigenImagen origen, {
+    required Color colorPrincipal,
+    required Color colorSobrePrincipal,
+  }) async {
     final foto = await _picker.pickImage(
       source: origen == OrigenImagen.camara ? ImageSource.camera : ImageSource.gallery,
       requestFullMetadata: false,
     );
     if (foto == null) return null;
 
+    CroppedFile? recorte;
+    try {
+      recorte = await _recortador.cropImage(
+        sourcePath: foto.path,
+        compressFormat: ImageCompressFormat.png, // sin perdida: el texto queda nitido
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Recorta la tabla',
+            toolbarColor: colorPrincipal,
+            toolbarWidgetColor: colorSobrePrincipal,
+            activeControlsWidgetColor: colorPrincipal,
+            statusBarLight: false,
+            lockAspectRatio: false,
+            initAspectRatio: CropAspectRatioPreset.original,
+            hideBottomControls: false,
+          ),
+          IOSUiSettings(title: 'Recorta la tabla', aspectRatioLockEnabled: false),
+        ],
+      );
+    } finally {
+      if (recorte == null) await _borrar(foto.path);
+    }
+    if (recorte == null) return null;
+
     final reconocedor = TextRecognizer(script: TextRecognitionScript.latin);
     try {
-      final texto = await reconocedor.processImage(InputImage.fromFilePath(foto.path));
+      final texto = await reconocedor.processImage(InputImage.fromFilePath(recorte.path));
       final palabras = <PalabraOcr>[
         for (final bloque in texto.blocks)
           for (final linea in bloque.lines)
@@ -47,10 +81,15 @@ class EscanerNotas {
     } finally {
       await reconocedor.close();
       // Criterio 9: la imagen no se almacena.
-      try {
-        await File(foto.path).delete();
-      } catch (_) {}
+      await _borrar(foto.path);
+      await _borrar(recorte.path);
     }
+  }
+
+  static Future<void> _borrar(String ruta) async {
+    try {
+      await File(ruta).delete();
+    } catch (_) {}
   }
 
   /// Solo en modo debug: imprime lo que leyo el OCR para convertir pruebas
