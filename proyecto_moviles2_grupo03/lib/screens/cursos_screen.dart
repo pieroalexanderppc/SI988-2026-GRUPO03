@@ -6,6 +6,7 @@ import '../services/calculo_curso_service.dart';
 import '../services/calculos_multinivel.dart';
 import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
+import '../services/simulador_curso_service.dart';
 import '../theme/estado_nota_colors.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/card_resultado.dart';
@@ -16,7 +17,6 @@ import '../widgets/tarjeta_curso.dart';
 import 'escanear_notas_screen.dart';
 import 'unidades_screen.dart';
 
-/// Pantalla 04 - Detalle de ciclo: promedio del ciclo y sus cursos (H11).
 class CursosScreen extends StatefulWidget {
   final String cicloId;
   final String cicloNombre;
@@ -39,7 +39,6 @@ class _CursosScreenState extends State<CursosScreen> {
   String? _uid;
   Stream<List<Curso>>? _cursosStream;
 
-  /// Calculos cacheados por la lista de cursos actual, para no recalcular en cada build.
   String _claveCalculos = '';
   Future<Map<String, ResultadoCalculoCurso>>? _calculos;
 
@@ -48,19 +47,30 @@ class _CursosScreenState extends State<CursosScreen> {
     super.initState();
     _uid = FirebaseAuth.instance.currentUser?.uid;
     final uid = _uid;
-    if (uid != null) _cursosStream = _service.obtenerCursos(uid, widget.cicloId);
+
+    if (uid != null) {
+      _cursosStream = _service.obtenerCursos(uid, widget.cicloId);
+    }
   }
 
-  Future<Map<String, ResultadoCalculoCurso>> _calculosPara(List<Curso> cursos) {
+  Future<Map<String, ResultadoCalculoCurso>> _calculosPara(
+    List<Curso> cursos,
+  ) {
     final clave = cursos.map((c) => c.id).join(',');
+
     if (_calculos == null || clave != _claveCalculos) {
       _claveCalculos = clave;
       _calculos = _calculoService.obtenerCalculosCursos(_uid!, cursos);
     }
+
     return _calculos!;
   }
 
-  void _recalcular() => setState(() => _calculos = null);
+  void _recalcular() {
+    setState(() {
+      _calculos = null;
+    });
+  }
 
   void _mostrarMensaje(String texto) {
     ScaffoldMessenger.of(context)
@@ -71,6 +81,7 @@ class _CursosScreenState extends State<CursosScreen> {
   Future<void> _crearOEditarCurso({Curso? curso}) async {
     final uid = _uid;
     if (uid == null) return;
+
     final nombre = await pedirNombre(
       context,
       titulo: curso == null ? 'Agregar curso' : 'Editar curso',
@@ -79,14 +90,21 @@ class _CursosScreenState extends State<CursosScreen> {
       inicial: curso?.nombre ?? '',
       textoBoton: curso == null ? 'Agregar' : 'Guardar',
     );
+
     if (nombre == null) return;
+
     try {
       if (curso == null) {
         await _service.crearCurso(uid, widget.cicloId, nombre);
       } else {
         await _service.actualizarCurso(uid, curso, nombre);
       }
-      if (mounted) _mostrarMensaje(curso == null ? 'Curso agregado.' : 'Curso actualizado.');
+
+      if (mounted) {
+        _mostrarMensaje(
+          curso == null ? 'Curso agregado.' : 'Curso actualizado.',
+        );
+      }
     } catch (_) {
       if (mounted) _mostrarMensaje('No se pudo guardar el curso.');
     }
@@ -95,12 +113,16 @@ class _CursosScreenState extends State<CursosScreen> {
   Future<void> _eliminarCurso(Curso curso) async {
     final uid = _uid;
     if (uid == null) return;
+
     final ok = await confirmarEliminar(
       context,
       titulo: 'Eliminar curso',
-      mensaje: 'Se eliminará "${curso.nombre}" con todas sus unidades y notas.',
+      mensaje:
+          'Se eliminará "${curso.nombre}" con todas sus unidades y notas.',
     );
+
     if (!ok) return;
+
     try {
       await _service.eliminarCurso(uid, curso.id);
       if (mounted) _mostrarMensaje('Curso eliminado.');
@@ -112,15 +134,21 @@ class _CursosScreenState extends State<CursosScreen> {
   Future<void> _eliminarCiclo() async {
     final uid = _uid;
     if (uid == null) return;
+
     final ok = await confirmarEliminar(
       context,
       titulo: 'Eliminar ciclo',
-      mensaje: 'Se eliminará "${widget.cicloNombre}" con todos sus cursos, unidades y notas.',
+      mensaje:
+          'Se eliminará "${widget.cicloNombre}" con todos sus cursos, unidades y notas.',
     );
+
     if (!ok) return;
+
     try {
       await _ciclosService.eliminarCiclo(uid, widget.cicloId);
+
       if (!mounted) return;
+
       _mostrarMensaje('Ciclo eliminado.');
       Navigator.of(context).pop();
     } catch (_) {
@@ -128,28 +156,179 @@ class _CursosScreenState extends State<CursosScreen> {
     }
   }
 
-  /// H19: registra un curso completo escaneando el reporte del portal.
   Future<void> _escanearReporte() async {
     final cursoId = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => EscanearNotasScreen(cicloId: widget.cicloId, cicloNombre: widget.cicloNombre),
+        builder: (_) => EscanearNotasScreen(
+          cicloId: widget.cicloId,
+          cicloNombre: widget.cicloNombre,
+        ),
       ),
     );
+
     if (cursoId != null) _recalcular();
   }
 
   Future<void> _abrirCurso(Curso curso) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => UnidadesScreen(cursoId: curso.id, cursoNombre: curso.nombre)),
+      MaterialPageRoute(
+        builder: (_) => UnidadesScreen(
+          cursoId: curso.id,
+          cursoNombre: curso.nombre,
+        ),
+      ),
     );
-    _recalcular();
+
+    if (mounted) _recalcular();
+  }
+
+  // H16: simulador de nota para el curso completo.
+  Future<void> _abrirSimuladorCurso(Curso curso) async {
+    final uid = _uid;
+    if (uid == null) return;
+
+    final objetivoController = TextEditingController(text: '10.5');
+
+    try {
+      final resultados = await Future.wait<dynamic>([
+        _calculoService.obtenerCalculoCurso(uid, curso.id),
+        _calculoService.obtenerPesosUnidades(uid, curso.id),
+      ]);
+
+      if (!mounted) return;
+
+      final calculo = resultados[0] as ResultadoCalculoCurso;
+      final pesos = resultados[1] as Map<String, double>;
+
+      if (pesos.isEmpty) {
+        _mostrarMensaje('Este curso todavía no tiene unidades registradas.');
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('Simulador H16 · ${curso.nombre}'),
+            content: TextField(
+              controller: objetivoController,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Nota objetivo del curso',
+                helperText: 'Ingresa un valor entre 0 y 20',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final objetivo = double.tryParse(
+                    objetivoController.text.trim().replaceAll(',', '.'),
+                  );
+
+                  if (objetivo == null ||
+                      objetivo < 0 ||
+                      objetivo > 20) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Ingresa una nota válida entre 0 y 20.'),
+                      ),
+                    );
+                    return;
+                  }
+
+                  final simulacion = SimuladorCursoService.calcular(
+                    objetivo: objetivo,
+                    notasPorUnidad: calculo.notasPorUnidad,
+                    unidadCompleta: calculo.unidadCompleta,
+                    pesosPorUnidad: pesos,
+                  );
+
+                  Navigator.pop(dialogContext);
+
+                  showDialog<void>(
+                    context: context,
+                    builder: (resultadoContext) {
+                      final sinPendientes =
+                          simulacion.unidadesPendientes == 0;
+
+                      final imposible =
+                          !sinPendientes &&
+                          !simulacion.objetivoAlcanzable;
+
+                      String mensaje;
+
+                      if (sinPendientes) {
+                        mensaje =
+                            'No hay unidades pendientes.\n\n'
+                            'Nota final actual: '
+                            '${calculo.notaFinal?.toStringAsFixed(1) ?? "No disponible"}.\n'
+                            'Objetivo ingresado: ${objetivo.toStringAsFixed(1)}.';
+                      } else if (imposible) {
+                        mensaje =
+                            'La meta no es alcanzable con las unidades pendientes.\n\n'
+                            'Máximo promedio posible del curso: '
+                            '${simulacion.maximoAlcanzable.toStringAsFixed(1)}.\n'
+                            'Nota objetivo: ${objetivo.toStringAsFixed(1)}.';
+                      } else {
+                        mensaje =
+                            'Nota objetivo: ${objetivo.toStringAsFixed(1)}\n'
+                            'Unidades pendientes: ${simulacion.unidadesPendientes}\n'
+                            'Peso pendiente: ${simulacion.porcentajePendiente.toStringAsFixed(1)} %\n\n'
+                            'Promedio necesario en las unidades pendientes: '
+                            '${simulacion.notaNecesaria.toStringAsFixed(1)}\n'
+                            'Máximo promedio posible del curso: '
+                            '${simulacion.maximoAlcanzable.toStringAsFixed(1)}';
+                      }
+
+                      return AlertDialog(
+                        title: Text(
+                          imposible
+                              ? 'Meta inalcanzable'
+                              : 'Resultado de simulación',
+                        ),
+                        content: Text(mensaje),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(resultadoContext),
+                            child: const Text('Cerrar'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+                child: const Text('Calcular'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        _mostrarMensaje('No se pudo calcular la simulación del curso.');
+      }
+    } finally {
+      objetivoController.dispose();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final stream = _cursosStream;
+
     if (stream == null) {
-      return const Scaffold(body: Center(child: Text('Debes iniciar sesión.')));
+      return const Scaffold(
+        body: Center(child: Text('Debes iniciar sesión.')),
+      );
     }
 
     return Scaffold(
@@ -184,13 +363,17 @@ class _CursosScreenState extends State<CursosScreen> {
         stream: stream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(child: Text('No se pudieron cargar los cursos.'));
+            return const Center(
+              child: Text('No se pudieron cargar los cursos.'),
+            );
           }
+
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final cursos = snapshot.data!;
+
           if (cursos.isEmpty) {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
@@ -198,7 +381,8 @@ class _CursosScreenState extends State<CursosScreen> {
                 EstadoVacio(
                   icono: Icons.menu_book_rounded,
                   titulo: 'Aún no tienes cursos',
-                  texto: 'Agrega los cursos que llevas en ${widget.cicloNombre}. '
+                  texto:
+                      'Agrega los cursos que llevas en ${widget.cicloNombre}. '
                       'Luego registra sus unidades y notas.',
                   textoBoton: 'Agregar primer curso',
                   onPressed: _crearOEditarCurso,
@@ -220,7 +404,9 @@ class _CursosScreenState extends State<CursosScreen> {
             future: _calculosPara(cursos),
             builder: (context, calc) {
               final resultados = calc.data ?? const {};
-              final cargando = calc.connectionState != ConnectionState.done;
+              final cargando =
+                  calc.connectionState != ConnectionState.done;
+
               return RefreshIndicator(
                 onRefresh: () async {
                   _recalcular();
@@ -247,9 +433,12 @@ class _CursosScreenState extends State<CursosScreen> {
     bool cargando,
   ) {
     final estado = EstadoNotaColors.of(context);
-    final promedio = CalculoCursoService.promedioDeCursos(resultados.values);
-    final conNotas = resultados.values.where((r) => r.notaActual != null).length;
-    final enRiesgo = resultados.values.where((r) => (r.notaActual ?? 99) < 10.5).length;
+    final promedio =
+        CalculoCursoService.promedioDeCursos(resultados.values);
+    final conNotas =
+        resultados.values.where((r) => r.notaActual != null).length;
+    final enRiesgo =
+        resultados.values.where((r) => (r.notaActual ?? 99) < 10.5).length;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -258,7 +447,9 @@ class _CursosScreenState extends State<CursosScreen> {
         CardResultado(
           nota: cargando ? null : promedio,
           titulo: 'Promedio del ciclo',
-          subtitulo: cargando ? 'Calculando…' : '$conNotas de ${cursos.length} cursos con notas',
+          subtitulo: cargando
+              ? 'Calculando…'
+              : '$conNotas de ${cursos.length} cursos con notas',
         ),
         const SizedBox(height: 22),
         SeccionTitulo(
@@ -267,7 +458,11 @@ class _CursosScreenState extends State<CursosScreen> {
               ? null
               : Text(
                   enRiesgo == 1 ? '1 en riesgo' : '$enRiesgo en riesgo',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: estado.desaprobado),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: estado.desaprobado,
+                  ),
                 ),
         ),
         const SizedBox(height: 10),
@@ -276,14 +471,19 @@ class _CursosScreenState extends State<CursosScreen> {
             key: ValueKey(curso.id),
             nombre: curso.nombre,
             nota: resultados[curso.id]?.notaActual,
-            pctEvaluado: resultados[curso.id]?.porcentajeEvaluado ?? 0,
+            pctEvaluado:
+                resultados[curso.id]?.porcentajeEvaluado ?? 0,
             cargando: cargando,
             onTap: () => _abrirCurso(curso),
             onLongPress: () => mostrarOpciones(
               context,
               titulo: curso.nombre,
               opciones: [
-                OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar curso', onTap: () => _crearOEditarCurso(curso: curso)),
+                OpcionMenu(
+                  icono: Icons.edit_rounded,
+                  texto: 'Editar curso',
+                  onTap: () => _crearOEditarCurso(curso: curso),
+                ),
                 OpcionMenu(
                   icono: Icons.delete_outline_rounded,
                   texto: 'Eliminar curso',
@@ -291,6 +491,17 @@ class _CursosScreenState extends State<CursosScreen> {
                   destructiva: true,
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: cargando
+                  ? null
+                  : () => _abrirSimuladorCurso(curso),
+              icon: const Icon(Icons.calculate_outlined),
+              label: const Text('Simulador de curso H16'),
             ),
           ),
           const SizedBox(height: 10),
