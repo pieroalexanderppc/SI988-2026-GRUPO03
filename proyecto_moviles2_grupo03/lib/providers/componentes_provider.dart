@@ -11,10 +11,13 @@ class ComponentesProvider extends ChangeNotifier {
   final CalculosService _calculosService = CalculosService();
   Timer? _debounceTimer;
   
-  // Guardamos el uid si el usuario esta autenticado
+  // Guardamos el uid solo si el usuario esta autenticado y verifico su correo.
+  // Una cuenta sin verificar se comporta como modo sin cuenta (no guarda).
   String? get currentUid {
     try {
-      return FirebaseAuth.instance.currentUser?.uid;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || !user.emailVerified) return null;
+      return user.uid;
     } catch (e) {
       return null;
     }
@@ -115,6 +118,20 @@ class ComponentesProvider extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    _guardarEnFirestore();
+  }
+
+  /// Vuelve a las 2 filas iniciales (accion "reiniciar" de la calculadora).
+  void reiniciar() {
+    _componentes.clear();
+    _inicializarFilas();
+    notifyListeners();
+    _guardarEnFirestore();
+  }
+
+  /// Guarda los componentes actuales en la cuenta recien vinculada
+  /// (por ejemplo, al verificar el correo desde la calculadora sin cuenta).
+  void sincronizar() {
     _guardarEnFirestore();
   }
 

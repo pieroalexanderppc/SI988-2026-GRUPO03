@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/ciclo.dart';
+import 'borrado_cascada.dart';
 
 class CiclosService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -40,7 +41,8 @@ class CiclosService {
     await cicloRef.set(ciclo.toMap());
   }
 
-  /// Elimina un ciclo y todos los cursos asociados.
+  /// Elimina un ciclo y todos los cursos asociados, con sus unidades,
+  /// tipos de evaluacion y notas.
   Future<void> eliminarCiclo(
     String uid,
     String cicloId,
@@ -52,16 +54,10 @@ class CiclosService {
         .where('cicloId', isEqualTo: cicloId)
         .get();
 
-    final batch = _firestore.batch();
-
-    for (final curso in cursosSnapshot.docs) {
-      batch.delete(curso.reference);
-    }
-
-    batch.delete(
-      usuarioRef.collection('ciclos').doc(cicloId),
+    await Future.wait(
+      cursosSnapshot.docs.map((curso) => BorradoCascada.curso(curso.reference)),
     );
 
-    await batch.commit();
+    await usuarioRef.collection('ciclos').doc(cicloId).delete();
   }
 }
