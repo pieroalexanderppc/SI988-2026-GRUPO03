@@ -49,6 +49,22 @@ class CalculosEvaluaciones {
     return sumaPonderada;
   }
 
+  /// Promedio de lo evaluado en la unidad (escala 0-20): no cuenta como 0
+  /// los tipos que aun no tienen notas. Retorna `null` si no hay notas.
+  /// Si todos los tipos tienen notas y suman 100 %, coincide con [calcularNotaUnidad].
+  static double? calcularPromedioParcialUnidad(
+    List<TipoEvaluacion> tipos,
+    Map<String, List<Nota>> notasPorTipo,
+  ) {
+    final nota = calcularNotaUnidad(tipos, notasPorTipo);
+    if (nota == null) return null;
+    final evaluado = tipos
+        .where((t) => (notasPorTipo[t.id] ?? []).isNotEmpty)
+        .fold<double>(0.0, (acc, t) => acc + t.porcentaje);
+    if (evaluado <= 0) return null;
+    return nota / (evaluado / 100.0);
+  }
+
   /// Determina si una nota es aprobatoria según el estándar peruano (>= 10.5).
   static bool esAprobado(double nota) {
     return nota >= 10.5;

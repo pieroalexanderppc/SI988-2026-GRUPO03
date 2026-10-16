@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/componentes_provider.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/banner_sin_cuenta.dart';
-import '../widgets/borde_punteado.dart';
+import '../widgets/boton_punteado.dart';
 import '../widgets/card_resultado.dart';
 import '../widgets/cta_crear_cuenta.dart';
 import '../widgets/fila_componente.dart';
@@ -140,7 +140,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 8),
               ],
               const SizedBox(height: 4),
-              _BotonAgregar(onPressed: provider.agregarComponente),
+              BotonPunteado(texto: 'Agregar componente', onPressed: provider.agregarComponente),
             ],
           );
         },
@@ -194,44 +194,6 @@ class _EncabezadoTabla extends StatelessWidget {
           ),
           const SizedBox(width: ColumnasComponente.borrar + 8),
         ],
-      ),
-    );
-  }
-}
-
-/// Boton punteado "+ Agregar componente" al final de la lista.
-class _BotonAgregar extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const _BotonAgregar({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return BordePunteado(
-      color: scheme.primary.withValues(alpha: 0.5),
-      radio: 16,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onPressed,
-          child: SizedBox(
-            height: 52,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_rounded, color: scheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Agregar componente',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: scheme.primary),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

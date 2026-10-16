@@ -7,7 +7,10 @@ import '../utils/formato_nota.dart';
 class LineaPesos extends StatelessWidget {
   final double suma;
 
-  const LineaPesos({super.key, required this.suma});
+  /// Version corta para cabeceras: "100%" o "90% · falta 10%".
+  final bool compacta;
+
+  const LineaPesos({super.key, required this.suma, this.compacta = false});
 
   @override
   Widget build(BuildContext context) {
@@ -20,18 +23,34 @@ class LineaPesos extends StatelessWidget {
     final IconData icono;
     final String texto;
 
+    final prefijo = compacta ? '' : 'Los pesos suman ';
     if (esCompleta) {
       color = estado.aprobado;
       icono = Icons.check_circle_rounded;
-      texto = 'Los pesos suman 100%';
+      texto = '${prefijo}100%';
     } else if (diferencia < 0) {
       color = estado.aviso;
       icono = Icons.error_rounded;
-      texto = 'Los pesos suman ${FormatoNota.porcentaje(suma)}% · falta ${FormatoNota.porcentaje(-diferencia)}%';
+      texto = '$prefijo${FormatoNota.porcentaje(suma)}% · falta ${FormatoNota.porcentaje(-diferencia)}%';
     } else {
       color = estado.desaprobado;
       icono = Icons.cancel_rounded;
-      texto = 'Los pesos suman ${FormatoNota.porcentaje(suma)}% · te pasaste ${FormatoNota.porcentaje(diferencia)}%';
+      texto = '$prefijo${FormatoNota.porcentaje(suma)}% · te pasaste ${FormatoNota.porcentaje(diferencia)}%';
+    }
+
+    if (compacta) {
+      return Semantics(
+        label: 'Los pesos suman $texto',
+        excludeSemantics: true,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, color: color, size: 18),
+            const SizedBox(width: 4),
+            Text(texto, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+          ],
+        ),
+      );
     }
 
     return Semantics(

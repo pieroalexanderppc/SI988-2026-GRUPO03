@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../theme/estado_nota_colors.dart';
 import '../utils/formato_nota.dart';
 import 'borde_punteado.dart';
+import 'escala_nota.dart';
 
 /// Tarjeta de resultado compacta (DESIGN.md seccion 6 y pantalla 07).
 /// Recibe la nota ya calculada; no calcula nada.
@@ -179,6 +180,133 @@ class _NumeroNota extends StatelessWidget {
       duration: duracion,
       curve: Curves.easeOutCubic,
       builder: (context, valor, _) => Text(FormatoNota.nota(valor), style: estilo),
+    );
+  }
+}
+
+/// Tarjeta de resultado expandida (DESIGN.md seccion 6 y pantalla 07):
+/// titulo + pill de estado, numero grande "/ 20", EscalaNota y un pie.
+class CardResultadoExpandida extends StatelessWidget {
+  final double? nota;
+  final String titulo;
+  final String pie;
+  final double umbral;
+
+  const CardResultadoExpandida({
+    super.key,
+    required this.nota,
+    required this.titulo,
+    required this.pie,
+    this.umbral = 10.5,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final estado = EstadoNotaColors.of(context);
+    final esOscuro = Theme.of(context).brightness == Brightness.dark;
+    final sinAnimaciones = MediaQuery.disableAnimationsOf(context);
+    final valor = nota;
+    final aprobado = valor == null ? null : valor >= umbral;
+
+    final Color fondo;
+    final Color texto;
+    final Color colorEstado;
+    final Color colorNota;
+    if (aprobado == null) {
+      fondo = scheme.surfaceContainerLowest;
+      texto = scheme.onSurface;
+      colorEstado = scheme.onSurfaceVariant;
+      colorNota = scheme.onSurfaceVariant;
+    } else if (aprobado) {
+      fondo = estado.aprobadoFondo;
+      texto = estado.onAprobadoFondo;
+      colorEstado = estado.aprobado;
+      colorNota = esOscuro ? estado.aprobado : estado.onAprobadoFondo;
+    } else {
+      fondo = estado.desaprobadoFondo;
+      texto = estado.onDesaprobadoFondo;
+      colorEstado = estado.desaprobado;
+      colorNota = esOscuro ? estado.desaprobado : estado.onDesaprobadoFondo;
+    }
+    final textoPill = esOscuro ? fondo : Colors.white;
+
+    Widget tarjeta = AnimatedContainer(
+      duration: Duration(milliseconds: sinAnimaciones ? 150 : 300),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: BoxDecoration(color: fondo, borderRadius: BorderRadius.circular(28)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: texto),
+                ),
+              ),
+              if (aprobado != null)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(8, 5, 12, 5),
+                  decoration: BoxDecoration(color: colorEstado, borderRadius: BorderRadius.circular(999)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(aprobado ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                          size: 18, color: textoPill),
+                      const SizedBox(width: 6),
+                      Text(
+                        aprobado ? 'Aprobado' : 'Desaprobado',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textoPill),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              if (valor == null)
+                Text('—', style: AppTheme.estiloNota(76, color: colorNota))
+              else
+                TweenAnimationBuilder<double>(
+                  tween: Tween(end: valor),
+                  duration: Duration(milliseconds: sinAnimaciones ? 0 : 450),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, v, _) =>
+                      Text(FormatoNota.nota(v), style: AppTheme.estiloNota(76, color: colorNota)),
+                ),
+              const SizedBox(width: 6),
+              Text(
+                '/ 20',
+                style: AppTheme.estiloNota(22, color: colorNota.withValues(alpha: 0.7), weight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          EscalaNota(nota: valor, umbral: umbral),
+          const SizedBox(height: 12),
+          Text(pie, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: texto)),
+        ],
+      ),
+    );
+
+    if (aprobado == null) {
+      tarjeta = BordePunteado(color: scheme.outline, radio: 28, grosor: 1.2, child: tarjeta);
+    }
+
+    return Semantics(
+      container: true,
+      label: aprobado == null
+          ? '$titulo, sin notas. $pie'
+          : '$titulo ${FormatoNota.nota(valor)}, ${aprobado ? 'aprobado' : 'desaprobado'}. $pie',
+      excludeSemantics: true,
+      child: tarjeta,
     );
   }
 }

@@ -49,6 +49,26 @@ class EstructuraUnidad {
     return tipos.every((t) => t.estaCompleto);
   }
 
+  /// Suma de porcentajes de los tipos que ya tienen al menos una nota.
+  double get porcentajeTiposEvaluados {
+    return tipos
+        .where((t) => t.estaCompleto)
+        .fold<double>(0.0, (acc, t) => acc + t.tipo.porcentaje);
+  }
+
+  /// Cantidad total de notas registradas en la unidad.
+  int get cantidadNotas => tipos.fold<int>(0, (acc, t) => acc + t.notas.length);
+
+  /// Promedio de lo evaluado hasta ahora (escala 0-20).
+  /// A diferencia de [notaCalculada], no cuenta como 0 los tipos sin notas:
+  /// si solo hay Examen (40 %) con 13, el promedio parcial es 13 y no 5.2.
+  double? get promedioParcial {
+    final nota = notaCalculada;
+    final evaluado = porcentajeTiposEvaluados;
+    if (nota == null || evaluado <= 0) return null;
+    return nota / (evaluado / 100.0);
+  }
+
   /// Nota calculada ponderada de la unidad.
   /// Si ningún tipo tiene notas, retorna `null`.
   double? get notaCalculada {
@@ -97,6 +117,19 @@ class ResultadoCalculoCurso {
   /// Estado de completitud por cada unidad (id -> estaCompleta).
   final Map<String, bool> unidadCompleta;
 
+  /// Promedio de lo evaluado hasta ahora, redondeado a 1 decimal.
+  /// Es la nota que el curso tendria si se mantiene el rendimiento actual.
+  final double? promedioParcial;
+
+  /// Porcentaje del curso que ya tiene notas (0-100).
+  final double porcentajeEvaluado;
+
+  /// Promedio parcial de cada unidad (id -> promedio de lo evaluado).
+  final Map<String, double?> promedioParcialPorUnidad;
+
+  /// Cantidad de notas registradas por unidad (id -> cantidad).
+  final Map<String, int> notasRegistradasPorUnidad;
+
   const ResultadoCalculoCurso({
     this.notaFinal,
     this.notaAcumulada,
@@ -104,11 +137,18 @@ class ResultadoCalculoCurso {
     required this.mensajeEstado,
     required this.notasPorUnidad,
     required this.unidadCompleta,
+    this.promedioParcial,
+    this.porcentajeEvaluado = 0,
+    this.promedioParcialPorUnidad = const {},
+    this.notasRegistradasPorUnidad = const {},
   });
+
+  /// Nota a mostrar: la final si el calculo esta completo, si no el promedio parcial.
+  double? get notaActual => notaFinal ?? promedioParcial;
 
   /// Determina si la nota es aprobatoria (>= 10.5).
   bool get esAprobado {
-    final valor = notaFinal ?? notaAcumulada;
+    final valor = notaActual;
     if (valor == null) return false;
     return valor >= 10.5;
   }
@@ -156,7 +196,10 @@ class CalculosMultinivel {
 
     // 2. Procesar cada unidad
     double sumaPonderadaCurso = 0.0;
+    double porcentajeEvaluado = 0.0;
     bool algunaNotaRegistrada = false;
+    final Map<String, double?> promedioParcialPorUnidad = {};
+    final Map<String, int> notasRegistradasPorUnidad = {};
 
     for (final estUnidad in unidades) {
       final uId = estUnidad.unidad.id;
@@ -165,6 +208,10 @@ class CalculosMultinivel {
 
       notasPorUnidad[uId] = notaUnidad;
       unidadCompleta[uId] = estUnidad.estaCompleta;
+      promedioParcialPorUnidad[uId] = estUnidad.promedioParcial;
+      notasRegistradasPorUnidad[uId] = estUnidad.cantidadNotas;
+      porcentajeEvaluado +=
+          estUnidad.unidad.porcentaje * (estUnidad.porcentajeTiposEvaluados / 100.0);
 
       if (estUnidad.tipos.isEmpty) {
         motivosIncompletos.add('Falta registrar tipos de evaluación en "$uNombre".');
@@ -203,8 +250,15 @@ class CalculosMultinivel {
             : 'No hay notas registradas en este curso.',
         notasPorUnidad: notasPorUnidad,
         unidadCompleta: unidadCompleta,
+        promedioParcialPorUnidad: promedioParcialPorUnidad,
+        notasRegistradasPorUnidad: notasRegistradasPorUnidad,
       );
     }
+
+    final promedioParcial = porcentajeEvaluado > 0
+        ? redondearUnDecimal(sumaPonderadaCurso / (porcentajeEvaluado / 100.0))
+        : null;
+    final evaluadoRedondeado = redondearUnDecimal(porcentajeEvaluado);
 
     // Si falta información en alguna unidad o porcentaje
     if (motivosIncompletos.isNotEmpty) {
@@ -215,6 +269,10 @@ class CalculosMultinivel {
         mensajeEstado: motivosIncompletos.first,
         notasPorUnidad: notasPorUnidad,
         unidadCompleta: unidadCompleta,
+        promedioParcial: promedioParcial,
+        porcentajeEvaluado: evaluadoRedondeado,
+        promedioParcialPorUnidad: promedioParcialPorUnidad,
+        notasRegistradasPorUnidad: notasRegistradasPorUnidad,
       );
     }
 
@@ -228,6 +286,10 @@ class CalculosMultinivel {
       mensajeEstado: 'Cálculo completo',
       notasPorUnidad: notasPorUnidad,
       unidadCompleta: unidadCompleta,
+      promedioParcial: notaFinalRedondeada,
+      porcentajeEvaluado: evaluadoRedondeado,
+      promedioParcialPorUnidad: promedioParcialPorUnidad,
+      notasRegistradasPorUnidad: notasRegistradasPorUnidad,
     );
   }
 }
