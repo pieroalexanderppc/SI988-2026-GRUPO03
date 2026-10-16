@@ -114,7 +114,10 @@ class _Token {
   /// Peso que se leyo con un "%" mal reconocido (ej. "1596" en vez de "15 %").
   final bool corregido;
 
-  const _Token(this.texto, this.x, this.tipo, {this.valor, this.corregido = false});
+  /// Ancho / alto de la caja: sirve para detectar un digito perdido.
+  final double proporcion;
+
+  const _Token(this.texto, this.x, this.tipo, {this.valor, this.corregido = false, this.proporcion = 0.6});
 }
 
 class LectorReporteNotas {
@@ -127,6 +130,7 @@ class LectorReporteNotas {
   static ReporteDetectado leer(List<PalabraOcr> palabras) {
     if (palabras.isEmpty) return const ReporteDetectado(unidades: []);
     final filas = _agruparEnFilas(palabras);
+    final anchoImagen = palabras.map((p) => p.derecha).reduce(math.max);
 
     final filasTexto = <String>[];
     String? curso;
@@ -157,7 +161,7 @@ class LectorReporteNotas {
       filasTexto.add(texto);
 
       // Fila de unidad: "Unidad I ... 30 %"
-      final inicioUnidad = _anclaUnidad(fila);
+      final inicioUnidad = _anclaUnidad(fila, anchoImagen);
       if (inicioUnidad != null) {
         if (!tablaEmpezo && curso == null) curso = _tituloAntes(filasTexto..removeLast());
         tablaEmpezo = true;
@@ -165,7 +169,8 @@ class LectorReporteNotas {
         final tokens = _clasificar(fila.sublist(inicioUnidad));
         final porcentaje = tokens.where((t) => t.tipo == _Tipo.porcentaje).firstOrNull;
         final enColumna = columnas == null ? null : _enColumna(tokens, columnas, _Columna.pesoU);
-        final peso = porcentaje ?? enColumna;
+        // Si el "%" no se leyo, cualquier numero de la fila de la unidad es su peso (dudoso).
+        final peso = porcentaje ?? enColumna ?? tokens.where((t) => t.tipo == _Tipo.numero).firstOrNull;
         unidades.add(UnidadDetectada(
           // Numeracion por orden de aparicion: evita "Unidad 49" por un romano mal leido.
           nombre: 'Unidad ${unidades.length + 1}',
@@ -178,7 +183,11 @@ class LectorReporteNotas {
       // Fila de criterio: "Evaluacion 01  10 %  13  Oct 09 2026  Actitudinal"
       final inicioCriterio = _anclaCriterio(fila);
       if (inicioCriterio != null) {
+        if (!tablaEmpezo && curso == null) curso = _tituloAntes(filasTexto.sublist(0, filasTexto.length - 1));
         tablaEmpezo = true;
+        // "Evaluacion 01" otra vez: empezo otra unidad aunque no se leyo su fila ni su encabezado.
+        final numero = _numeroCriterio(fila, inicioCriterio);
+        if (numero == 1 && unidades.isNotEmpty && unidades.last.criterios.length >= 2) esperaUnidadNueva = true;
         if (unidades.isEmpty || esperaUnidadNueva) {
           unidades.add(UnidadDetectada(nombre: 'Unidad ${unidades.length + 1}', pesoDudoso: true));
           esperaUnidadNueva = false;
@@ -255,9 +264,9 @@ class LectorReporteNotas {
       final x = fila[i].izquierda;
       if (t == 'unidad' || (t.length >= 4 && _distancia(t, 'unidad') <= 2)) {
         columnas.add((_Columna.unidad, x));
-      } else if (t.startsWith('criter')) {
+      } else if (t.startsWith('crit') || (t.length >= 6 && _distancia(t, 'criterio') <= 3)) {
         columnas.add((_Columna.criterio, x));
-      } else if (t.startsWith('peso')) {
+      } else if (t.startsWith('peso') || (t.length == 4 && _distancia(t, 'peso') <= 1)) {
         final siguiente = i + 1 < fila.length ? textos[i + 1] : '';
         final esU = t.endsWith('u') || t.endsWith('u.') || siguiente.startsWith('u');
         final esC = t.endsWith('c') || t.endsWith('c.') || siguiente.startsWith('c');
@@ -265,22 +274,29 @@ class LectorReporteNotas {
         pesos++;
       } else if (t == 'nota' || (t.length == 4 && _distancia(t, 'nota') <= 1)) {
         columnas.add((_Columna.nota, x));
-      } else if (t.startsWith('fech')) {
+      } else if (t.startsWith('fech') || (t.length == 5 && _distancia(t, 'fecha') <= 1)) {
         columnas.add((_Columna.fecha, x));
-      } else if (t.startsWith('descrip')) {
+      } else if (t.startsWith('descrip') || (t.length >= 7 && _distancia(t, 'descripcion') <= 3)) {
         columnas.add((_Columna.descripcion, x));
       }
     }
     final distintas = columnas.map((c) => c.$1).toSet();
-    final esEncabezado = distintas.length >= 3 &&
-        (distintas.contains(_Columna.criterio) || distintas.contains(_Columna.nota) || pesos > 0);
+    final sinNumeros = !textos.any((t) => RegExp(r'\d').hasMatch(t));
+    final esEncabezado = (distintas.length >= 3 &&
+            (distintas.contains(_Columna.criterio) || distintas.contains(_Columna.nota) || pesos > 0)) ||
+        // Encabezado mal leido: al menos 2 titulos y ningun numero ("Griterno ... Descripclon").
+        (distintas.length >= 2 &&
+            sinNumeros &&
+            (distintas.contains(_Columna.criterio) || distintas.contains(_Columna.descripcion)));
     if (!esEncabezado) return null;
     columnas.sort((a, b) => a.$2.compareTo(b.$2));
     return columnas;
   }
 
   /// Posicion de la palabra "Unidad" seguida de un numero romano o arabigo, o null.
-  static int? _anclaUnidad(List<PalabraOcr> fila) {
+  /// Tambien acepta "Unidad" sola (romano no leido) si esta en la parte izquierda
+  /// de la imagen, donde va la columna "Unidad".
+  static int? _anclaUnidad(List<PalabraOcr> fila, double anchoImagen) {
     for (var i = 0; i < fila.length && i < 3; i++) {
       final t = _normalizar(fila[i].texto);
       if (RegExp(r'^unid[a-z]*[ivxl1|]+$').hasMatch(t)) return i; // "UnidadII" pegado
@@ -289,9 +305,32 @@ class LectorReporteNotas {
         final siguiente = _normalizar(fila[i + 1].texto);
         if (RegExp(r'^([ivxl1|]{1,4}|\d{1,2})$').hasMatch(siguiente)) return i;
       }
+      if (esUnidad && i == 0 && fila[i].izquierda < anchoImagen * 0.35) {
+        final resto = fila.skip(1).map((p) => _normalizar(p.texto)).toList();
+        final soloNumeros = resto.every((r) => RegExp(r'^[\d%.,o ]+$').hasMatch(r) || _esSignoPorcentaje(r));
+        if (soloNumeros) return i;
+      }
     }
     return null;
   }
+
+  /// Numero del criterio ("01", "o1", "ol", "0335%" -> 3), o null si no se lee.
+  static int? _numeroCriterio(List<PalabraOcr> fila, int inicio) {
+    final pegado = RegExp(r'(\S{2})$').firstMatch(fila[inicio].texto)?.group(1) ?? '';
+    final candidatos = [if (inicio + 1 < fila.length) fila[inicio + 1].texto, pegado];
+    for (final c in candidatos) {
+      final limpio = c.replaceAll(RegExp('[oOD]'), '0').replaceAll(RegExp('[lIi|!]'), '1');
+      final m = RegExp(r'^(\d{1,2})').firstMatch(limpio);
+      if (m != null) {
+        final n = int.parse(m.group(1)!.length == 2 || limpio.length == 1 ? m.group(1)! : m.group(1)!.substring(0, 1));
+        if (n >= 1 && n <= 12) return n;
+      }
+    }
+    return null;
+  }
+
+  static bool _esSignoPorcentaje(String t) =>
+      const {'%', '96', '9%', '%o', '%0', '9/o', 'o/o', '°/o', '9%o', '%.'}.contains(t.trim().toLowerCase());
 
   /// Posicion de la palabra "Evaluacion" (o una lectura parecida), o null.
   static int? _anclaCriterio(List<PalabraOcr> fila) {
@@ -301,6 +340,17 @@ class LectorReporteNotas {
       if (t.startsWith('evalu') || t.startsWith('evai')) return i;
       final letras = t.replaceAll(RegExp(r'[^a-z]'), '');
       if (letras.length >= 7 && letras.length <= 13 && _distancia(letras, 'evaluacion') <= 4) return i;
+      if (i + 1 < fila.length && letras.length >= 4) {
+        final unidas = letras + _normalizar(fila[i + 1].texto).replaceAll(RegExp(r'[^a-z]'), '');
+        if (unidas.length >= 7 && unidas.length <= 13 && _distancia(unidas, 'evaluacion') <= 4) {
+          // "Ewalua in": se unen las dos palabras para que "in" no quede como descripcion.
+          final a = fila[i], b = fila[i + 1];
+          fila[i] = PalabraOcr('${a.texto}${b.texto}', a.izquierda, math.min(a.arriba, b.arriba), b.derecha,
+              math.max(a.abajo, b.abajo), angulo: a.angulo);
+          fila.removeAt(i + 1);
+          return i;
+        }
+      }
     }
     return null;
   }
@@ -317,6 +367,13 @@ class LectorReporteNotas {
         (RegExp(r'^([ivxl1|]{1,4}|\d{1,2})$').hasMatch(_normalizar(palabras.first.texto)) ||
             RegExp(r'^\d{1,2}$').hasMatch(_limpiarNumero(palabras.first.texto)))) {
       palabras.removeAt(0); // tambien "O1" leido en vez de "01"
+    } else if (palabras.isNotEmpty) {
+      // "0335%": numero de criterio pegado al peso -> se deja solo "35%".
+      final pegado = RegExp(r'^[0oO][\dOolI](\d{1,3}%?)$').firstMatch(palabras.first.texto.trim());
+      if (pegado != null) {
+        final p0 = palabras.first;
+        palabras[0] = PalabraOcr(pegado.group(1)!, p0.izquierda, p0.arriba, p0.derecha, p0.abajo);
+      }
     }
 
     final tokens = <_Token>[];
@@ -349,21 +406,34 @@ class LectorReporteNotas {
       }
       restoFecha = 0;
 
-      if (crudo == '%') continue; // ya se uso con el numero anterior
+      // Signo "%" suelto (o mal leido como "96", "9%"): convierte el numero anterior en porcentaje.
+      if (_esSignoPorcentaje(crudo) && tokens.isNotEmpty && tokens.last.tipo == _Tipo.numero && tokens.last.valor! <= 100) {
+        final previo = tokens.removeLast();
+        tokens.add(_Token(previo.texto, previo.x, _Tipo.porcentaje,
+            valor: previo.valor, corregido: crudo != '%', proporcion: previo.proporcion));
+        continue;
+      }
+      if (crudo == '%') continue;
 
       final limpio = _limpiarNumero(crudo);
       final esNumerico = RegExp(r'^\d+(?:\.\d+)?%?$').hasMatch(limpio) && RegExp(r'\d').hasMatch(crudo);
       if (esNumerico) {
         final conPorcentaje = limpio.endsWith('%') || siguiente == '%';
         final valor = double.tryParse(limpio.replaceAll('%', ''))!;
-        if (conPorcentaje) {
+        final proporcion = p.alto > 0 ? p.ancho / p.alto : 0.6;
+        final pegadoNueve = RegExp(r'^(\d{1,2})9%$').firstMatch(limpio);
+        if (valor > 100 && pegadoNueve != null) {
+          // "259%": el "%" se leyo como "9%" -> 25 %.
+          tokens.add(_Token(crudo, p.izquierda, _Tipo.porcentaje,
+              valor: double.parse(pegadoNueve.group(1)!), corregido: true));
+        } else if (conPorcentaje) {
           tokens.add(_Token(crudo, p.izquierda, _Tipo.porcentaje, valor: valor));
         } else if (valor > 100 && RegExp(r'^\d{1,3}96$').hasMatch(limpio)) {
           // "%" leido como "96": "1596" -> 15 %.
           tokens.add(_Token(crudo, p.izquierda, _Tipo.porcentaje,
               valor: double.parse(limpio.substring(0, limpio.length - 2)), corregido: true));
         } else {
-          tokens.add(_Token(crudo, p.izquierda, _Tipo.numero, valor: valor));
+          tokens.add(_Token(crudo, p.izquierda, _Tipo.numero, valor: valor, proporcion: proporcion));
         }
         continue;
       }
@@ -415,6 +485,12 @@ class LectorReporteNotas {
     } else {
       nota = candidatas.firstOrNull;
       notaDudosa = candidatas.length > 1;
+    }
+
+    // Una nota de un solo digito con caja muy ancha o muy angosta suele ser un
+    // "15" o "14" al que el OCR le perdio el "1": se marca para revisarla.
+    if (nota != null && _limpiarNumero(nota.texto).length == 1 && (nota.proporcion > 0.85 || nota.proporcion < 0.35)) {
+      notaDudosa = true;
     }
 
     // Descripcion: las palabras que quedan (sin meses ni fechas).
@@ -470,11 +546,16 @@ class LectorReporteNotas {
   static String _corregirPalabra(String palabra) {
     if (palabra.length < 5) return palabra;
     final buscada = _normalizar(palabra);
+    // "Examende" -> "Examen de"
+    if (buscada.length > 6 && buscada.endsWith('de')) {
+      final sinDe = _corregirPalabra(palabra.substring(0, palabra.length - 2));
+      if (_vocabulario.contains(sinDe)) return '$sinDe de';
+    }
     String? mejor;
-    var menor = 3;
+    var menor = 4;
     for (final v in _vocabulario) {
       final d = _distancia(buscada, _normalizar(v));
-      if (d < menor && d <= (v.length >= 9 ? 2 : 1)) {
+      if (d < menor && d <= (v.length >= 10 ? 3 : (v.length >= 8 ? 2 : 1))) {
         menor = d;
         mejor = v;
       }

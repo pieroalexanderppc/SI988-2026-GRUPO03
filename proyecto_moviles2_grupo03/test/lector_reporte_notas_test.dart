@@ -252,4 +252,32 @@ void main() {
       expect(u.criterios, isNotEmpty);
     });
   });
+
+  group('LectorReporteNotas - lecturas reales de baja calidad', () {
+    test('Foto 2: sin encabezados ni romanos, separa las unidades por "Evaluacion 01"', () {
+      final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_foto_pantalla_2.txt'));
+      expect(r.curso, 'SOLUCIONES MOVILES I');
+      expect(r.unidades.length, 2);
+      for (final u in r.unidades) {
+        expect(u.criterios.map((c) => c.peso), [15, 25, 35, 25]);
+        expect(u.criterios.map((c) => c.descripcion), ['Actitudinal', 'Cognitivo', 'Procedimental', 'Examen de unidad']);
+      }
+      // "5" y "4" con caja sospechosa (el OCR perdio el "1" de 15 y 14): quedan para revisar.
+      final u1 = r.unidades[0].criterios;
+      expect(u1[0].notaDudosa, isTrue);
+      expect(u1[1].nota, 16);
+      expect(u1[1].notaDudosa, isFalse);
+      expect(u1[2].notaDudosa, isTrue);
+    });
+
+    test('Foto 3: "%" leido como "9%" y encabezados deformados', () {
+      final r = LectorReporteNotas.leer(cargarLectura('test/fixtures/ocr_foto_pantalla_3.txt'));
+      expect(r.curso, 'SOLUCIONES MÓVILES II');
+      expect(r.unidades.length, 3);
+      expect(r.unidades[0].criterios.map((c) => c.nota), [15, 16, 14, 15]);
+      expect(r.unidades[1].criterios.map((c) => c.peso), [15, 25, 35, 25]);
+      expect(r.unidades[2].criterios.map((c) => c.peso), [25, 35, 40]);
+      expect(r.unidades[2].criterios.any((c) => c.descripcion == 'In'), isFalse);
+    });
+  });
 }
