@@ -19,6 +19,7 @@ class SimuladorScreen extends StatefulWidget {
   final Map<String, bool>? unidadCompleta;
   final Map<String, double>? pesosPorUnidad;
   final CalculoCursoService? calculoService;
+  final double? notaEstimadaInicial;
 
   const SimuladorScreen({
     super.key,
@@ -29,6 +30,7 @@ class SimuladorScreen extends StatefulWidget {
     this.unidadCompleta,
     this.pesosPorUnidad,
     this.calculoService,
+    this.notaEstimadaInicial,
   });
 
   @override
@@ -38,6 +40,8 @@ class SimuladorScreen extends StatefulWidget {
 class _SimuladorScreenState extends State<SimuladorScreen> {
   late final CalculoCursoService _calculoService = widget.calculoService ?? CalculoCursoService();
   final TextEditingController _objetivoCtrl = TextEditingController(text: '10.5');
+
+  late double _notaEstimadaPendientes = widget.notaEstimadaInicial ?? 11.0;
 
   late bool _cargando = widget.notasPorUnidad == null ||
       widget.unidadCompleta == null ||
@@ -120,6 +124,53 @@ class _SimuladorScreenState extends State<SimuladorScreen> {
     });
   }
 
+  int get _unidadesPendientesCount {
+    int total = _pesosPorUnidad.length;
+    int completas = _unidadCompleta.values.where((c) => c).length;
+    return total - completas;
+  }
+
+  /// Calcula el promedio final resultante proyectado combinando las unidades
+  /// ya registradas con la nota estimada en las unidades pendientes (Criterio H18).
+  double? get _promedioFinalSimulado {
+    if (_pesosPorUnidad.isEmpty) return null;
+    double totalPonderado = 0.0;
+    double sumaPesos = 0.0;
+
+    for (final entry in _pesosPorUnidad.entries) {
+      final unidadId = entry.key;
+      final peso = entry.value;
+      final completada = _unidadCompleta[unidadId] ?? false;
+      final nota = _notasPorUnidad[unidadId];
+
+      if (completada && nota != null) {
+        totalPonderado += (nota * peso);
+        sumaPesos += peso;
+      } else {
+        totalPonderado += (_notaEstimadaPendientes * peso);
+        sumaPesos += peso;
+      }
+    }
+
+    if (sumaPesos == 0) return null;
+    return totalPonderado / sumaPesos;
+  }
+
+  Widget _buildCardPromedioFinalInteractivo() {
+    return _TarjetaPromedioFinalInteractivo(
+      promedioFinal: _promedioFinalSimulado,
+      hayPendientes: _unidadesPendientesCount > 0,
+      notaEstimada: _notaEstimadaPendientes,
+      onNotaEstimadaChanged: _unidadesPendientesCount > 0
+          ? (nuevaNota) {
+              setState(() {
+                _notaEstimadaPendientes = nuevaNota;
+              });
+            }
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -169,23 +220,30 @@ class _SimuladorScreenState extends State<SimuladorScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Columna izquierda: Entrada de nota y presets
+        // Columna izquierda: Promedio final interactivo y entrada de nota
         Expanded(
           flex: 5,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardEntrada(),
+              _buildCardPromedioFinalInteractivo(),
               const SizedBox(height: 16),
-              _buildCardResumenCurso(),
+              _buildCardEntrada(),
             ],
           ),
         ),
         const SizedBox(width: 24),
-        // Columna derecha: Tarjeta destacada de resultado y desglose
+        // Columna derecha: Tarjeta destacada de resultado y resumen de unidades
         Expanded(
           flex: 5,
-          child: _buildPanelResultado(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPanelResultado(),
+              const SizedBox(height: 16),
+              _buildCardResumenCurso(),
+            ],
+          ),
         ),
       ],
     );
@@ -196,6 +254,8 @@ class _SimuladorScreenState extends State<SimuladorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildCardPromedioFinalInteractivo(),
+        const SizedBox(height: 16),
         _buildCardEntrada(),
         const SizedBox(height: 16),
         _buildPanelResultado(),
@@ -548,6 +608,201 @@ class _FilaDetalle extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Tarjeta interactiva de promedio final y condición Aprobado / Desaprobado (Criterios H18).
+class _TarjetaPromedioFinalInteractivo extends StatefulWidget {
+  final double? promedioFinal;
+  final bool hayPendientes;
+  final double notaEstimada;
+  final ValueChanged<double>? onNotaEstimadaChanged;
+
+  const _TarjetaPromedioFinalInteractivo({
+    required this.promedioFinal,
+    required this.hayPendientes,
+    required this.notaEstimada,
+    this.onNotaEstimadaChanged,
+  });
+
+  @override
+  State<_TarjetaPromedioFinalInteractivo> createState() =>
+      _TarjetaPromedioFinalInteractivoState();
+}
+
+class _TarjetaPromedioFinalInteractivoState
+    extends State<_TarjetaPromedioFinalInteractivo> {
+  bool? _aprobadoAnterior;
+
+  @override
+  void didUpdateWidget(covariant _TarjetaPromedioFinalInteractivo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.promedioFinal != null) {
+      final ahora = widget.promedioFinal! >= 10.5;
+      if (_aprobadoAnterior != null && _aprobadoAnterior != ahora) {
+        ahora ? HapticFeedback.lightImpact() : HapticFeedback.mediumImpact();
+      }
+      _aprobadoAnterior = ahora;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final estadoTema = EstadoNotaColors.of(context);
+    final promedio = widget.promedioFinal;
+
+    if (promedio == null) {
+      return const SizedBox.shrink();
+    }
+
+    final esAprobado = promedio >= 10.5;
+    final colorFondo = esAprobado
+        ? estadoTema.aprobadoFondo
+        : estadoTema.desaprobadoFondo;
+    final colorTexto = esAprobado
+        ? estadoTema.onAprobadoFondo
+        : estadoTema.onDesaprobadoFondo;
+    final colorAcento = esAprobado
+        ? estadoTema.aprobado
+        : estadoTema.desaprobado;
+    final icono = esAprobado
+        ? Icons.check_circle_rounded
+        : Icons.cancel_rounded;
+    final textoCondicion = esAprobado ? 'Aprobado' : 'Desaprobado';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: colorFondo,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: colorAcento.withValues(alpha: 0.6),
+          width: 2.0,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.hayPendientes
+                        ? 'Promedio final proyectado'
+                        : 'Promedio final del curso',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: colorTexto,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colorAcento,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icono, color: Colors.white, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        textoCondicion,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  FormatoNota.nota(promedio),
+                  style: AppTheme.estiloNota(
+                    44,
+                    color: colorTexto,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '/ 20',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: colorTexto.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              esAprobado
+                  ? '¡Condición aprobatoria para este promedio del curso!'
+                  : 'Condición desaprobatoria. Se requiere mejorar en lo que falta.',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorTexto,
+              ),
+            ),
+            if (widget.hayPendientes && widget.onNotaEstimadaChanged != null) ...[
+              const SizedBox(height: 14),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Simular nota en unidades pendientes:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colorTexto,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${FormatoNota.nota(widget.notaEstimada)} / 20',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: colorTexto,
+                    ),
+                  ),
+                ],
+              ),
+              Slider(
+                value: widget.notaEstimada.clamp(0.0, 20.0),
+                min: 0.0,
+                max: 20.0,
+                divisions: 40,
+                activeColor: colorAcento,
+                inactiveColor: colorAcento.withValues(alpha: 0.25),
+                label: FormatoNota.nota(widget.notaEstimada),
+                onChanged: widget.onNotaEstimadaChanged,
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
