@@ -1,11 +1,11 @@
 {
-    "name": "proyecto_moviles2_grupo03",
-    "short_name": "proyecto_moviles2_grupo03",
+    "name": "Pondera",
+    "short_name": "Pondera",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#3B36C4",
+    "theme_color": "#3B36C4",
+    "description": "Tu promedio ponderado, claro y al día.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

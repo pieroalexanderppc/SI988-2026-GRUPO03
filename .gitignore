@@ -1,0 +1,36 @@
+# Archivos que no deben subirse al repositorio.
+# El proyecto Flutter tiene ademas su propio .gitignore en proyecto_moviles2_grupo03/.
+
+# Configuracion local de asistentes de IA y editores
+.claude/
+.cursor/
+.windsurf/
+.aider*
+.idea/
+*.iml
+
+# Secretos y credenciales (nunca subir)
+.env
+.env.*
+*.keystore
+*.jks
+key.properties
+*.pem
+*.p12
+service-account*.json
+*-firebase-adminsdk-*.json
+
+# Documentos de trabajo locales
+contexto_proyecto.md
+DESIGN.md
+Pondera*UX*UI*/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Caches de herramientas
+.kotlin/
+__pycache__/
+*.log
