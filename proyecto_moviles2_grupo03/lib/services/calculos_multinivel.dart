@@ -130,6 +130,9 @@ class ResultadoCalculoCurso {
   /// Cantidad de notas registradas por unidad (id -> cantidad).
   final Map<String, int> notasRegistradasPorUnidad;
 
+  /// Unidades del curso en el orden en que se muestran (Unidad 1, 2, 3...).
+  final List<Unidad> unidades;
+
   const ResultadoCalculoCurso({
     this.notaFinal,
     this.notaAcumulada,
@@ -141,6 +144,7 @@ class ResultadoCalculoCurso {
     this.porcentajeEvaluado = 0,
     this.promedioParcialPorUnidad = const {},
     this.notasRegistradasPorUnidad = const {},
+    this.unidades = const [],
   });
 
   /// Nota a mostrar: la final si el calculo esta completo, si no el promedio parcial.
@@ -157,6 +161,20 @@ class ResultadoCalculoCurso {
 /// Lógica de cálculo multinivel para promedios de curso:
 /// Promedio del tipo -> Nota de unidad -> Nota final del curso.
 class CalculosMultinivel {
+  /// Orden natural de nombres: "Unidad 2" antes que "Unidad 10".
+  static int _compararNatural(String a, String b) {
+    final re = RegExp(r'(\d+)|(\D+)');
+    final pa = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+    final pb = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+    for (var i = 0; i < pa.length && i < pb.length; i++) {
+      final na = int.tryParse(pa[i]);
+      final nb = int.tryParse(pb[i]);
+      final c = (na != null && nb != null) ? na.compareTo(nb) : pa[i].compareTo(pb[i]);
+      if (c != 0) return c;
+    }
+    return pa.length.compareTo(pb.length);
+  }
+
   /// Redondea un valor numérico a un decimal según el criterio de aceptación.
   static double redondearUnDecimal(double valor) {
     return double.parse(valor.toStringAsFixed(1));
@@ -200,6 +218,8 @@ class CalculosMultinivel {
     bool algunaNotaRegistrada = false;
     final Map<String, double?> promedioParcialPorUnidad = {};
     final Map<String, int> notasRegistradasPorUnidad = {};
+    final unidadesOrdenadas = [for (final u in unidades) u.unidad]
+      ..sort((a, b) => _compararNatural(a.nombre, b.nombre));
 
     for (final estUnidad in unidades) {
       final uId = estUnidad.unidad.id;
@@ -252,6 +272,7 @@ class CalculosMultinivel {
         unidadCompleta: unidadCompleta,
         promedioParcialPorUnidad: promedioParcialPorUnidad,
         notasRegistradasPorUnidad: notasRegistradasPorUnidad,
+        unidades: unidadesOrdenadas,
       );
     }
 
@@ -273,6 +294,7 @@ class CalculosMultinivel {
         porcentajeEvaluado: evaluadoRedondeado,
         promedioParcialPorUnidad: promedioParcialPorUnidad,
         notasRegistradasPorUnidad: notasRegistradasPorUnidad,
+        unidades: unidadesOrdenadas,
       );
     }
 
@@ -290,6 +312,7 @@ class CalculosMultinivel {
       porcentajeEvaluado: evaluadoRedondeado,
       promedioParcialPorUnidad: promedioParcialPorUnidad,
       notasRegistradasPorUnidad: notasRegistradasPorUnidad,
+      unidades: unidadesOrdenadas,
     );
   }
 }

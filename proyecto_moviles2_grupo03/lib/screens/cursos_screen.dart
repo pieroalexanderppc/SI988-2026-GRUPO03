@@ -14,6 +14,7 @@ import '../widgets/estado_vacio.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_curso.dart';
 import 'escanear_notas_screen.dart';
+import 'evolucion_screen.dart';
 import 'simulador_screen.dart';
 import 'unidades_screen.dart';
 
@@ -169,6 +170,20 @@ class _CursosScreenState extends State<CursosScreen> {
     if (cursoId != null) _recalcular();
   }
 
+  /// H20: grafico comparando los cursos del ciclo.
+  Future<void> _abrirEvolucion() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EvolucionScreen(
+          vistaInicial: VistaEvolucion.entreCursos,
+          cicloId: widget.cicloId,
+          cicloNombre: widget.cicloNombre,
+        ),
+      ),
+    );
+    if (mounted) _recalcular();
+  }
+
   Future<void> _abrirCurso(Curso curso) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -228,6 +243,11 @@ class _CursosScreenState extends State<CursosScreen> {
         padre: 'Ciclo',
         titulo: widget.cicloNombre,
         acciones: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart_rounded),
+            tooltip: 'Comparar cursos',
+            onPressed: _abrirEvolucion,
+          ),
           IconButton(
             icon: const Icon(Icons.document_scanner_rounded),
             tooltip: 'Escanear reporte de notas',

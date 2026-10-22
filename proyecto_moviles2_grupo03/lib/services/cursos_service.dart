@@ -19,6 +19,13 @@ class CursosService {
         );
   }
 
+  /// Lee un curso por su id (null si no existe).
+  Future<Curso?> obtenerCurso(String uid, String cursoId) async {
+    final doc = await _firestore.collection('usuarios').doc(uid).collection('cursos').doc(cursoId).get();
+    final data = doc.data();
+    return data == null ? null : Curso.fromMap(doc.id, data);
+  }
+
   Future<void> crearCurso(
     String uid,
     String cicloId,
