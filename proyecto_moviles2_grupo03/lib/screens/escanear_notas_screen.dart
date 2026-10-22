@@ -59,7 +59,7 @@ enum _Fase { inicio, leyendo, revision, guardando }
 
 class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
   final EscanerNotas _escaner = EscanerNotas();
-  final ImportacionNotasService _importacion = ImportacionNotasService();
+  late final ImportacionNotasService _importacion = ImportacionNotasService();
 
   _Fase _fase = _Fase.inicio;
   String? _error;

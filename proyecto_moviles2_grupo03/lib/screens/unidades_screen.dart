@@ -21,6 +21,7 @@ import '../widgets/linea_pesos.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_unidad.dart';
 import 'escanear_notas_screen.dart';
+import 'evolucion_screen.dart';
 import 'simulador_screen.dart';
 import 'tipos_evaluacion_screen.dart';
 
@@ -221,6 +222,20 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
     if (guardado != null) _actualizarCalculo();
   }
 
+  /// H20: grafico de evolucion por unidad de este curso.
+  Future<void> _abrirEvolucion() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EvolucionScreen(
+          vistaInicial: VistaEvolucion.porUnidad,
+          cursoId: widget.cursoId,
+          cursoNombre: _nombre,
+        ),
+      ),
+    );
+    _actualizarCalculo();
+  }
+
   Future<void> _abrirUnidad(Unidad unidad) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -274,9 +289,9 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.document_scanner_rounded),
-            tooltip: 'Escanear unidades',
-            onPressed: _escanearUnidades,
+            icon: const Icon(Icons.show_chart_rounded),
+            tooltip: 'Evolución por unidad',
+            onPressed: _abrirEvolucion,
           ),
           IconButton(
             icon: const Icon(Icons.more_vert_rounded),
@@ -285,6 +300,7 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
               context,
               titulo: _nombre,
               opciones: [
+                OpcionMenu(icono: Icons.document_scanner_rounded, texto: 'Escanear unidades', onTap: _escanearUnidades),
                 OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar curso', onTap: _editarCurso),
                 OpcionMenu(
                   icono: Icons.delete_outline_rounded,

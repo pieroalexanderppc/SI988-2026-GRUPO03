@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-labelledby="titulo">
+  <title id="titulo">Logo de Pondera</title>
+  <!-- Cuadrado redondeado de marca (radio 18 sobre 64) -->
+  <rect width="64" height="64" rx="18" fill="#3B36C4"/>
+  <!-- Tres barras que suben: el promedio que crece -->
+  <rect x="12.7" y="35.7" width="9" height="16.3" rx="4.5" fill="#FFFFFF"/>
+  <rect x="27" y="27" width="9" height="25" rx="4.5" fill="#FFFFFF"/>
+  <rect x="41.3" y="14" width="9" height="38" rx="4.5" fill="#FFFFFF"/>
+  <!-- Linea punteada ambar: el umbral aprobatorio 10.5 -->
+  <g fill="#FFB547">
+    <circle cx="7.5" cy="31.3" r="1.5"/><circle cx="12.5" cy="31.3" r="1.5"/><circle cx="17.5" cy="31.3" r="1.5"/>
+    <circle cx="22.5" cy="31.3" r="1.5"/><circle cx="27.5" cy="31.3" r="1.5"/><circle cx="32.5" cy="31.3" r="1.5"/>
+    <circle cx="37.5" cy="31.3" r="1.5"/><circle cx="42.5" cy="31.3" r="1.5"/><circle cx="47.5" cy="31.3" r="1.5"/>
+    <circle cx="52.5" cy="31.3" r="1.5"/>
+  </g>
+</svg>
