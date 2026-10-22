@@ -1,11 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:printing/printing.dart';
+
 import '../models/curso.dart';
 import '../services/calculo_curso_service.dart';
 import '../services/calculos_multinivel.dart';
 import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
+import '../services/reporte_ciclo_pdf.dart';
 import '../theme/estado_nota_colors.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/card_resultado.dart';
@@ -207,6 +210,38 @@ class _CursosScreenState extends State<CursosScreen> {
     if (mounted) _recalcular();
   }
 
+  Future<void> _exportarPdf({
+    required List<Curso> cursos,
+    required Map<String, ResultadoCalculoCurso> resultados,
+    required double? promedioCiclo,
+    required int totalCreditos,
+  }) async {
+    if (cursos.isEmpty) {
+      _mostrarMensaje('No hay cursos para exportar en este ciclo.');
+      return;
+    }
+
+    try {
+      _mostrarMensaje('Generando reporte PDF…');
+      final pdfBytes = await ReporteCicloPdf.generarPdf(
+        cicloNombre: widget.cicloNombre,
+        cursos: cursos,
+        resultados: resultados,
+        promedioCiclo: promedioCiclo,
+        totalCreditos: totalCreditos,
+      );
+
+      final nombreLimpio =
+          widget.cicloNombre.replaceAll(RegExp(r'[^\w\-]'), '_');
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: 'Reporte_Pondera_$nombreLimpio.pdf',
+      );
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo generar o compartir el PDF.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final stream = _cursosStream;
@@ -347,6 +382,20 @@ class _CursosScreenState extends State<CursosScreen> {
           subtitulo: cargando
               ? 'Calculando…'
               : '$totalCreditos créditos matriculados • $conNotas de ${cursos.length} cursos con notas',
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _exportarPdf(
+              cursos: cursos,
+              resultados: resultados,
+              promedioCiclo: promedio,
+              totalCreditos: totalCreditos,
+            ),
+            icon: const Icon(Icons.picture_as_pdf_rounded),
+            label: const Text('Exportar reporte del ciclo (PDF)'),
+          ),
         ),
         const SizedBox(height: 22),
         SeccionTitulo(
