@@ -9,11 +9,15 @@ import 'calculos_multinivel.dart';
 class ResumenCiclo {
   final int cantidadCursos;
   final int cursosConNotas;
+  final int totalCreditos;
+  final int creditosEvaluados;
   final double? promedio;
 
   const ResumenCiclo({
     required this.cantidadCursos,
     required this.cursosConNotas,
+    this.totalCreditos = 0,
+    this.creditosEvaluados = 0,
     required this.promedio,
   });
 }
@@ -97,7 +101,31 @@ class CalculoCursoService {
     };
   }
 
-  /// Promedio de las notas actuales de los cursos que tienen notas.
+  /// Promedio ponderado por créditos de los cursos que tienen notas (H21).
+  /// Si un curso no tiene créditos especificados o es <= 0, toma 3 por defecto.
+  /// Retorna null si no hay cursos con notas.
+  static double? promedioPonderadoCiclo({
+    required List<Curso> cursos,
+    required Map<String, ResultadoCalculoCurso> resultados,
+  }) {
+    double sumaPonderada = 0.0;
+    int sumaCreditos = 0;
+
+    for (final curso in cursos) {
+      final res = resultados[curso.id];
+      final nota = res?.notaActual;
+      if (nota != null) {
+        final cr = curso.creditos > 0 ? curso.creditos : 3;
+        sumaPonderada += (nota * cr);
+        sumaCreditos += cr;
+      }
+    }
+
+    if (sumaCreditos == 0) return null;
+    return CalculosMultinivel.redondearUnDecimal(sumaPonderada / sumaCreditos);
+  }
+
+  /// Promedio de las notas actuales de los cursos que tienen notas (aritmético simple).
   static double? promedioDeCursos(
     Iterable<ResultadoCalculoCurso> resultados,
   ) {
@@ -116,7 +144,7 @@ class CalculoCursoService {
     return CalculosMultinivel.redondearUnDecimal(suma / notas.length);
   }
 
-  /// Obtiene el resumen de un ciclo.
+  /// Obtiene el resumen de un ciclo con promedio ponderado por créditos.
   Future<ResumenCiclo> obtenerResumenCiclo(
     String uid,
     String cicloId,
@@ -130,11 +158,27 @@ class CalculoCursoService {
 
     final resultados = await obtenerCalculosCursos(uid, cursos);
 
+    final totalCreditos = cursos.fold<int>(
+      0,
+      (acc, c) => acc + (c.creditos > 0 ? c.creditos : 3),
+    );
+    final creditosEvaluados = cursos
+        .where((c) => resultados[c.id]?.notaActual != null)
+        .fold<int>(
+          0,
+          (acc, c) => acc + (c.creditos > 0 ? c.creditos : 3),
+        );
+
     return ResumenCiclo(
       cantidadCursos: cursos.length,
       cursosConNotas:
           resultados.values.where((r) => r.notaActual != null).length,
-      promedio: promedioDeCursos(resultados.values),
+      totalCreditos: totalCreditos,
+      creditosEvaluados: creditosEvaluados,
+      promedio: promedioPonderadoCiclo(
+        cursos: cursos,
+        resultados: resultados,
+      ),
     );
   }
 }

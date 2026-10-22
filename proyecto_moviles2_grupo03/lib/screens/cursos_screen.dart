@@ -82,22 +82,33 @@ class _CursosScreenState extends State<CursosScreen> {
     final uid = _uid;
     if (uid == null) return;
 
-    final nombre = await pedirNombre(
+    final resultado = await pedirNombreYCreditos(
       context,
       titulo: curso == null ? 'Agregar curso' : 'Editar curso',
-      etiqueta: 'Nombre del curso',
-      hint: 'Ej. Soluciones Móviles II',
-      inicial: curso?.nombre ?? '',
+      etiquetaNombre: 'Nombre del curso',
+      hintNombre: 'Ej. Soluciones Móviles II',
+      inicialNombre: curso?.nombre ?? '',
+      inicialCreditos: curso?.creditos ?? 3,
       textoBoton: curso == null ? 'Agregar' : 'Guardar',
     );
 
-    if (nombre == null) return;
+    if (resultado == null) return;
 
     try {
       if (curso == null) {
-        await _service.crearCurso(uid, widget.cicloId, nombre);
+        await _service.crearCurso(
+          uid,
+          widget.cicloId,
+          resultado.nombre,
+          creditos: resultado.creditos,
+        );
       } else {
-        await _service.actualizarCurso(uid, curso, nombre);
+        await _service.actualizarCurso(
+          uid,
+          curso,
+          resultado.nombre,
+          creditos: resultado.creditos,
+        );
       }
 
       if (mounted) {
@@ -313,8 +324,14 @@ class _CursosScreenState extends State<CursosScreen> {
     bool cargando,
   ) {
     final estado = EstadoNotaColors.of(context);
-    final promedio =
-        CalculoCursoService.promedioDeCursos(resultados.values);
+    final totalCreditos = cursos.fold<int>(
+      0,
+      (acc, c) => acc + (c.creditos > 0 ? c.creditos : 3),
+    );
+    final promedio = CalculoCursoService.promedioPonderadoCiclo(
+      cursos: cursos,
+      resultados: resultados,
+    );
     final conNotas =
         resultados.values.where((r) => r.notaActual != null).length;
     final enRiesgo =
@@ -326,10 +343,10 @@ class _CursosScreenState extends State<CursosScreen> {
       children: [
         CardResultado(
           nota: cargando ? null : promedio,
-          titulo: 'Promedio del ciclo',
+          titulo: 'Promedio ponderado del ciclo',
           subtitulo: cargando
               ? 'Calculando…'
-              : '$conNotas de ${cursos.length} cursos con notas',
+              : '$totalCreditos créditos matriculados • $conNotas de ${cursos.length} cursos con notas',
         ),
         const SizedBox(height: 22),
         SeccionTitulo(
@@ -350,6 +367,7 @@ class _CursosScreenState extends State<CursosScreen> {
           TarjetaCurso(
             key: ValueKey(curso.id),
             nombre: curso.nombre,
+            creditos: curso.creditos,
             nota: resultados[curso.id]?.notaActual,
             pctEvaluado:
                 resultados[curso.id]?.porcentajeEvaluado ?? 0,
