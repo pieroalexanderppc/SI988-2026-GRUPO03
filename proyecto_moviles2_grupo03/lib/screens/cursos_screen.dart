@@ -15,7 +15,6 @@ import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_curso.dart';
 import 'escanear_notas_screen.dart';
 import 'evolucion_screen.dart';
-import 'simulador_screen.dart';
 import 'unidades_screen.dart';
 
 class CursosScreen extends StatefulWidget {
@@ -197,37 +196,6 @@ class _CursosScreenState extends State<CursosScreen> {
     if (mounted) _recalcular();
   }
 
-  // H16 + H17: simulador de nota para el curso completo con UI responsiva.
-  Future<void> _abrirSimuladorCurso(Curso curso) async {
-    final uid = _uid;
-    if (uid == null) return;
-
-    try {
-      final pesos = await _calculoService.obtenerPesosUnidades(uid, curso.id);
-
-      if (!mounted) return;
-
-      if (pesos.isEmpty) {
-        _mostrarMensaje('Este curso todavía no tiene unidades registradas.');
-        return;
-      }
-
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => SimuladorScreen(
-            cursoId: curso.id,
-            cursoNombre: curso.nombre,
-            cicloNombre: widget.cicloNombre,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (mounted) {
-        _mostrarMensaje('No se pudo abrir el simulador del curso.');
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final stream = _cursosStream;
@@ -403,17 +371,6 @@ class _CursosScreenState extends State<CursosScreen> {
                   destructiva: true,
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: cargando
-                  ? null
-                  : () => _abrirSimuladorCurso(curso),
-              icon: const Icon(Icons.calculate_outlined),
-              label: const Text('Simulador de curso H16'),
             ),
           ),
           const SizedBox(height: 10),

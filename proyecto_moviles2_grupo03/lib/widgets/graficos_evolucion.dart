@@ -146,6 +146,9 @@ class GraficoUnidades extends StatelessWidget {
                 ),
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
+                    // El cuadro se queda dentro del grafico (no se corta arriba).
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
                     getTooltipColor: (_) => scheme.inverseSurface,
                     getTooltipItems: (tocados) => [
                       for (final s in tocados)
@@ -162,7 +165,6 @@ class GraficoUnidades extends StatelessWidget {
                     color: scheme.primary,
                     barWidth: 3,
                     isStrokeCapRound: true,
-                    belowBarData: BarAreaData(show: true, color: scheme.primary.withValues(alpha: 0.08)),
                     dotData: FlDotData(
                       show: true,
                       getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
@@ -270,6 +272,8 @@ class GraficoCursos extends StatelessWidget {
               ),
               barTouchData: BarTouchData(
                 touchTooltipData: BarTouchTooltipData(
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
                   getTooltipColor: (_) => scheme.inverseSurface,
                   getTooltipItem: (grupo, _, _, _) {
                     final b = barras[grupo.x];
