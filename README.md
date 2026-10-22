@@ -126,6 +126,7 @@ La escala es vigesimal (0 a 20) y la nota mínima aprobatoria es **10.5**.
       <b>El logo</b> es un cuadrado redondeado con <b>tres barras que suben</b> (el promedio que crece) y una
       <b>línea punteada ámbar a media altura</b>, que representa el umbral aprobatorio de 10.5 que la nota supera.
       En la app se dibuja con código (<code>PonderaLogo</code>) y se anima al abrir la pantalla de bienvenida.
+      También es el <b>ícono de la app</b> en Android (ícono adaptativo con fondo índigo) y el favicon de la versión web.
     </td>
   </tr>
 </table>
@@ -431,7 +432,7 @@ Mejoras transversales: verificación de correo, rediseño completo según el sis
 - [ ] Recordatorios de evaluaciones con notificaciones locales.
 - [ ] Exportar el resumen del ciclo en PDF o imagen.
 - [ ] Escanear todos los cursos de un ciclo en una sola captura.
-- [ ] Ícono de la app con el logo de Pondera y diseño de dos paneles para tablet.
+- [ ] Diseño de dos paneles para tablet y web.
 
 ---
 

@@ -30,6 +30,7 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -56,3 +57,18 @@ flutter:
           weight: 700
         - asset: assets/fonts/BricolageGrotesque-ExtraBold.ttf
           weight: 800
+
+# Icono de la app (Pondera). Regenerar con: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icono.png"
+  min_sdk_android: 21
+  # Icono adaptativo (Android 8+): fondo indigo de marca y las barras al centro.
+  adaptive_icon_background: "#3B36C4"
+  adaptive_icon_foreground: "assets/icon/icono_foreground.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icono.png"
+    background_color: "#3B36C4"
+    theme_color: "#3B36C4"

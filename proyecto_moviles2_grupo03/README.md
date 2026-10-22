@@ -62,6 +62,7 @@ solo funciona en Android e iOS.
 | Un archivo de pruebas | `flutter test test/lector_reporte_notas_test.dart` |
 | Publicar reglas de Firestore | `firebase deploy --only firestore:rules` |
 | Reconfigurar Firebase | `flutterfire configure --project=g03-sm2-promedioapp` |
+| Regenerar el ícono de la app | `dart run flutter_launcher_icons` |
 
 ---
 
@@ -183,6 +184,7 @@ otro isolate) → ML Kit Text Recognition → `LectorReporteNotas` → vista pre
 | `android/app/proguard-rules.pro` | `-dontwarn` para los reconocedores de chino, japonés, coreano y devanagari que ML Kit referencia pero la app no incluye. Sin esto el build release falla. |
 | `android/app/src/main/AndroidManifest.xml` | Actividad `UCropActivity` del recortador de imágenes. |
 | `android/app/google-services.json` | Configuración de Firebase para Android. |
+| `android/app/src/main/res/mipmap-*` y `mipmap-anydpi-v26` | Ícono de la app generado por `flutter_launcher_icons` desde `assets/icon/` (ícono adaptativo: fondo `#3B36C4` y las barras del logo al centro). El nombre visible es `Pondera` (`android:label`). |
 
 `image_picker` usa la cámara del sistema mediante un *intent*, por lo que no se declara el permiso
 `CAMERA`. El modelo de ML Kit va incluido en la app y funciona sin Google Play Services.
