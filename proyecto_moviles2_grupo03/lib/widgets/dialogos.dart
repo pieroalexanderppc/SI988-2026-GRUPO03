@@ -4,6 +4,9 @@ import '../utils/formato_nota.dart';
 /// Resultado de [pedirNombreYPeso].
 typedef NombrePeso = ({String nombre, double peso});
 
+/// Resultado de [pedirNombreYCreditos] (H21).
+typedef NombreCreditos = ({String nombre, int creditos});
+
 /// Opcion de [mostrarOpciones].
 class OpcionMenu {
   final IconData icono;
@@ -20,6 +23,29 @@ class OpcionMenu {
 }
 
 double? _leerNumero(String? texto) => double.tryParse((texto ?? '').trim().replaceAll(',', '.'));
+
+/// Pide nombre y créditos para un curso (H21).
+Future<NombreCreditos?> pedirNombreYCreditos(
+  BuildContext context, {
+  required String titulo,
+  required String etiquetaNombre,
+  required String hintNombre,
+  String inicialNombre = '',
+  int inicialCreditos = 3,
+  required String textoBoton,
+}) {
+  return showDialog<NombreCreditos>(
+    context: context,
+    builder: (_) => _DialogoNombreCreditos(
+      titulo: titulo,
+      etiquetaNombre: etiquetaNombre,
+      hintNombre: hintNombre,
+      inicialNombre: inicialNombre,
+      inicialCreditos: inicialCreditos,
+      textoBoton: textoBoton,
+    ),
+  );
+}
 
 /// Pide un nombre (crear o renombrar ciclo / curso).
 Future<String?> pedirNombre(
@@ -246,4 +272,105 @@ Future<void> mostrarOpciones(
       ),
     ),
   );
+}
+
+class _DialogoNombreCreditos extends StatefulWidget {
+  final String titulo;
+  final String etiquetaNombre;
+  final String hintNombre;
+  final String inicialNombre;
+  final int inicialCreditos;
+  final String textoBoton;
+
+  const _DialogoNombreCreditos({
+    required this.titulo,
+    required this.etiquetaNombre,
+    required this.hintNombre,
+    required this.inicialNombre,
+    required this.inicialCreditos,
+    required this.textoBoton,
+  });
+
+  @override
+  State<_DialogoNombreCreditos> createState() => _DialogoNombreCreditosState();
+}
+
+class _DialogoNombreCreditosState extends State<_DialogoNombreCreditos> {
+  final _formKey = GlobalKey<FormState>();
+  late final _nombreCtrl = TextEditingController(text: widget.inicialNombre);
+  late final _creditosCtrl =
+      TextEditingController(text: widget.inicialCreditos.toString());
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _creditosCtrl.dispose();
+    super.dispose();
+  }
+
+  void _aceptar() {
+    if (!_formKey.currentState!.validate()) return;
+    final nombre = _nombreCtrl.text.trim();
+    final creditos = int.tryParse(_creditosCtrl.text.trim()) ?? 3;
+    Navigator.of(context)
+        .pop<NombreCreditos>((nombre: nombre, creditos: creditos));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.titulo),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _nombreCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: widget.etiquetaNombre,
+                hintText: widget.hintNombre,
+              ),
+              validator: (v) =>
+                  (v ?? '').trim().isEmpty ? 'Escribe un nombre' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _creditosCtrl,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _aceptar(),
+              decoration: const InputDecoration(
+                labelText: 'Créditos del curso',
+                helperText: 'Valor entre 1 y 10 créditos (por defecto 3)',
+                prefixIcon: Icon(Icons.school_outlined),
+                suffixText: 'cr.',
+              ),
+              validator: (v) {
+                final c = int.tryParse((v ?? '').trim());
+                if (c == null || c < 1 || c > 10) {
+                  return 'Ingresa un valor entre 1 y 10 créditos';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _aceptar,
+          child: Text(widget.textoBoton),
+        ),
+      ],
+    );
+  }
 }
