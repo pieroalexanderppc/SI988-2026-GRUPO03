@@ -16,13 +16,15 @@ class ReporteCicloPdf {
   static final PdfColor _colorTexto = PdfColor.fromHex('#1A1A24');
   static final PdfColor _colorTextoSecundario = PdfColor.fromHex('#5E5E6E');
 
-  /// Construye y retorna los bytes del PDF del ciclo.
+  /// Construye y retorna los bytes del PDF del ciclo con soporte multi-página.
   static Future<Uint8List> generarPdf({
     required String cicloNombre,
     required List<Curso> cursos,
     required Map<String, ResultadoCalculoCurso> resultados,
     required double? promedioCiclo,
     required int totalCreditos,
+    String? nombreEstudiante,
+    String? correoEstudiante,
     DateTime? fechaEmision,
   }) async {
     final pdf = pw.Document(
@@ -45,251 +47,48 @@ class ReporteCicloPdf {
     final esAprobado = promedioCiclo != null && promedioCiclo >= 10.5;
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
-              // 1. Cabecera
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'PONDERA',
-                        style: pw.TextStyle(
-                          color: _colorPrimario,
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      pw.SizedBox(height: 2),
-                      pw.Text(
-                        'Reporte de Avance Académico',
-                        style: pw.TextStyle(
-                          color: _colorTexto,
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.SizedBox(height: 2),
-                      pw.Text(
-                        'Ciclo: $cicloNombre',
-                        style: pw.TextStyle(
-                          color: _colorTextoSecundario,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text(
-                        'Fecha de emisión:',
-                        style: pw.TextStyle(
-                          color: _colorTextoSecundario,
-                          fontSize: 10,
-                        ),
-                      ),
-                      pw.Text(
-                        fechaStr,
-                        style: pw.TextStyle(
-                          color: _colorTexto,
-                          fontSize: 11,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 16),
-              pw.Divider(color: _colorPrimario, thickness: 1.5),
-              pw.SizedBox(height: 14),
-
-              // 2. Resumen del Ciclo (Tarjeta destacada)
-              pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: _colorFondoGris,
-                  borderRadius: pw.BorderRadius.circular(12),
-                  border: pw.Border.all(color: PdfColor.fromHex('#DCDCE8')),
-                ),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          'PROMEDIO PONDERADO DEL CICLO',
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            fontWeight: pw.FontWeight.bold,
-                            color: _colorTextoSecundario,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Row(
-                          crossAxisAlignment: pw.CrossAxisAlignment.end,
-                          children: [
-                            pw.Text(
-                              promedioCiclo != null
-                                  ? FormatoNota.nota(promedioCiclo)
-                                  : '-',
-                              style: pw.TextStyle(
-                                fontSize: 32,
-                                fontWeight: pw.FontWeight.bold,
-                                color: promedioCiclo == null
-                                    ? _colorTextoSecundario
-                                    : esAprobado
-                                        ? _colorAprobado
-                                        : _colorDesaprobado,
-                              ),
-                            ),
-                            pw.SizedBox(width: 4),
-                            pw.Text(
-                              '/ 20',
-                              style: pw.TextStyle(
-                                fontSize: 14,
-                                color: _colorTextoSecundario,
-                              ),
-                            ),
-                            if (promedioCiclo != null) ...[
-                              pw.SizedBox(width: 10),
-                              pw.Container(
-                                padding: const pw.EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: pw.BoxDecoration(
-                                  color: esAprobado
-                                      ? _colorAprobado
-                                      : _colorDesaprobado,
-                                  borderRadius: pw.BorderRadius.circular(6),
-                                ),
-                                child: pw.Text(
-                                  esAprobado ? 'APROBADO' : 'DESAPROBADO',
-                                  style: pw.TextStyle(
-                                    color: PdfColors.white,
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text(
-                          'Créditos matriculados: $totalCreditos cr.',
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            fontWeight: pw.FontWeight.bold,
-                            color: _colorTexto,
-                          ),
-                        ),
-                        pw.SizedBox(height: 2),
-                        pw.Text(
-                          'Créditos evaluados: $creditosEvaluados cr.',
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            color: _colorTextoSecundario,
-                          ),
-                        ),
-                        pw.SizedBox(height: 2),
-                        pw.Text(
-                          'Cursos con notas: $conNotas de ${cursos.length}',
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            color: _colorTextoSecundario,
-                          ),
-                        ),
-                        if (enRiesgo > 0) ...[
-                          pw.SizedBox(height: 2),
-                          pw.Text(
-                            'Cursos en riesgo: $enRiesgo',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: _colorDesaprobado,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 20),
-
-              // 3. Título de la tabla
-              pw.Text(
-                'Detalle de Cursos Matriculados',
-                style: pw.TextStyle(
-                  fontSize: 14,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _colorTexto,
-                ),
-              ),
-              pw.SizedBox(height: 8),
-
-              // 4. Tabla de Cursos
-              pw.Table(
-                border: pw.TableBorder(
-                  horizontalInside: pw.BorderSide(
-                    color: PdfColor.fromHex('#E0E0EC'),
+        header: (pw.Context context) {
+          if (context.pageNumber > 1) {
+            return pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 12),
+              padding: const pw.EdgeInsets.only(bottom: 6),
+              decoration: pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(
+                    color: PdfColor.fromHex('#DCDCE8'),
                     width: 0.8,
                   ),
-                  bottom: pw.BorderSide(
-                    color: PdfColor.fromHex('#B0B0C4'),
-                    width: 1,
-                  ),
                 ),
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(4.5),
-                  1: const pw.FlexColumnWidth(1.5),
-                  2: const pw.FlexColumnWidth(1.8),
-                  3: const pw.FlexColumnWidth(1.6),
-                  4: const pw.FlexColumnWidth(2.0),
-                },
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  // Fila Encabezado
-                  pw.TableRow(
-                    decoration: pw.BoxDecoration(color: _colorPrimario),
-                    children: [
-                      _celdaEncabezado('Curso', align: pw.TextAlign.left),
-                      _celdaEncabezado('Créditos'),
-                      _celdaEncabezado('Avance'),
-                      _celdaEncabezado('Nota'),
-                      _celdaEncabezado('Condición'),
-                    ],
-                  ),
-                  // Filas de Datos
-                  for (var i = 0; i < cursos.length; i++)
-                    _construirFilaCurso(
-                      curso: cursos[i],
-                      resultado: resultados[cursos[i].id],
-                      par: i % 2 == 0,
+                  pw.Text(
+                    'PONDERA - Reporte de Avance ($cicloNombre)',
+                    style: pw.TextStyle(
+                      color: _colorTextoSecundario,
+                      fontSize: 9,
                     ),
+                  ),
+                  pw.Text(
+                    fechaStr,
+                    style: pw.TextStyle(
+                      color: _colorTextoSecundario,
+                      fontSize: 9,
+                    ),
+                  ),
                 ],
               ),
-
-              pw.Spacer(),
-
-              // 5. Pie de página
+            );
+          }
+          return pw.SizedBox();
+        },
+        footer: (pw.Context context) {
+          return pw.Column(
+            children: [
               pw.Divider(color: PdfColor.fromHex('#DCDCE8'), thickness: 0.8),
               pw.SizedBox(height: 6),
               pw.Row(
@@ -303,7 +102,7 @@ class ReporteCicloPdf {
                     ),
                   ),
                   pw.Text(
-                    'Escala vigesimal (0 a 20) - Minima aprobatoria: 10.5',
+                    'Pagina ${context.pageNumber} de ${context.pagesCount}',
                     style: pw.TextStyle(
                       fontSize: 8,
                       color: _colorTextoSecundario,
@@ -313,6 +112,258 @@ class ReporteCicloPdf {
               ),
             ],
           );
+        },
+        build: (pw.Context context) {
+          return [
+            // 1. Cabecera principal (Solo página 1)
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'PONDERA',
+                        style: pw.TextStyle(
+                          color: _colorPrimario,
+                          fontSize: 24,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Reporte de Avance Academico',
+                        style: pw.TextStyle(
+                          color: _colorTexto,
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      if (nombreEstudiante != null &&
+                          nombreEstudiante.trim().isNotEmpty) ...[
+                        pw.Text(
+                          'Estudiante: $nombreEstudiante${correoEstudiante != null && correoEstudiante.isNotEmpty ? ' ($correoEstudiante)' : ''}',
+                          style: pw.TextStyle(
+                            color: _colorTexto,
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.SizedBox(height: 2),
+                      ],
+                      pw.Text(
+                        'Ciclo: $cicloNombre',
+                        style: pw.TextStyle(
+                          color: _colorTextoSecundario,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Fecha de emision:',
+                      style: pw.TextStyle(
+                        color: _colorTextoSecundario,
+                        fontSize: 10,
+                      ),
+                    ),
+                    pw.Text(
+                      fechaStr,
+                      style: pw.TextStyle(
+                        color: _colorTexto,
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 16),
+            pw.Divider(color: _colorPrimario, thickness: 1.5),
+            pw.SizedBox(height: 14),
+
+            // 2. Resumen del Ciclo (Tarjeta destacada)
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: _colorFondoGris,
+                borderRadius: pw.BorderRadius.circular(12),
+                border: pw.Border.all(color: PdfColor.fromHex('#DCDCE8')),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'PROMEDIO PONDERADO DEL CICLO',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _colorTextoSecundario,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text(
+                            promedioCiclo != null
+                                ? FormatoNota.nota(promedioCiclo)
+                                : '-',
+                            style: pw.TextStyle(
+                              fontSize: 32,
+                              fontWeight: pw.FontWeight.bold,
+                              color: promedioCiclo == null
+                                  ? _colorTextoSecundario
+                                  : esAprobado
+                                      ? _colorAprobado
+                                      : _colorDesaprobado,
+                            ),
+                          ),
+                          pw.SizedBox(width: 4),
+                          pw.Text(
+                            '/ 20',
+                            style: pw.TextStyle(
+                              fontSize: 14,
+                              color: _colorTextoSecundario,
+                            ),
+                          ),
+                          if (promedioCiclo != null) ...[
+                            pw.SizedBox(width: 10),
+                            pw.Container(
+                              padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: pw.BoxDecoration(
+                                color: esAprobado
+                                    ? _colorAprobado
+                                    : _colorDesaprobado,
+                                borderRadius: pw.BorderRadius.circular(6),
+                              ),
+                              child: pw.Text(
+                                esAprobado ? 'APROBADO' : 'DESAPROBADO',
+                                style: pw.TextStyle(
+                                  color: PdfColors.white,
+                                  fontSize: 9,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Creditos matriculados: $totalCreditos cr.',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _colorTexto,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Creditos evaluados: $creditosEvaluados cr.',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          color: _colorTextoSecundario,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Cursos con notas: $conNotas de ${cursos.length}',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          color: _colorTextoSecundario,
+                        ),
+                      ),
+                      if (enRiesgo > 0) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'Cursos en riesgo: $enRiesgo',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: _colorDesaprobado,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // 3. Título de la tabla
+            pw.Text(
+              'Detalle de Cursos Matriculados',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: _colorTexto,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+
+            // 4. Tabla de Cursos
+            pw.Table(
+              border: pw.TableBorder(
+                horizontalInside: pw.BorderSide(
+                  color: PdfColor.fromHex('#E0E0EC'),
+                  width: 0.8,
+                ),
+                bottom: pw.BorderSide(
+                  color: PdfColor.fromHex('#B0B0C4'),
+                  width: 1,
+                ),
+              ),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(4.5),
+                1: const pw.FlexColumnWidth(1.5),
+                2: const pw.FlexColumnWidth(1.8),
+                3: const pw.FlexColumnWidth(1.6),
+                4: const pw.FlexColumnWidth(2.0),
+              },
+              children: [
+                // Fila Encabezado
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: _colorPrimario),
+                  children: [
+                    _celdaEncabezado('Curso', align: pw.TextAlign.left),
+                    _celdaEncabezado('Creditos'),
+                    _celdaEncabezado('Avance'),
+                    _celdaEncabezado('Nota'),
+                    _celdaEncabezado('Condicion'),
+                  ],
+                ),
+                // Filas de Datos
+                for (var i = 0; i < cursos.length; i++)
+                  _construirFilaCurso(
+                    curso: cursos[i],
+                    resultado: resultados[cursos[i].id],
+                    par: i % 2 == 0,
+                  ),
+              ],
+            ),
+          ];
         },
       ),
     );
@@ -354,9 +405,12 @@ class ReporteCicloPdf {
       if (esRiesgo) {
         condicion = 'En riesgo';
         colorCondicion = _colorDesaprobado;
-      } else {
+      } else if (evaluado >= 99.9) {
         condicion = 'Aprobado';
         colorCondicion = _colorAprobado;
+      } else {
+        condicion = 'En curso';
+        colorCondicion = _colorPrimario;
       }
     }
 
