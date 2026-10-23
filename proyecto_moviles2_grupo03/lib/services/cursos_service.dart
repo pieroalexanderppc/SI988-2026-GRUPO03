@@ -29,8 +29,9 @@ class CursosService {
   Future<void> crearCurso(
     String uid,
     String cicloId,
-    String nombre,
-  ) async {
+    String nombre, {
+    int creditos = 3,
+  }) async {
     final ref = _firestore
         .collection('usuarios')
         .doc(uid)
@@ -41,6 +42,7 @@ class CursosService {
       id: ref.id,
       nombre: nombre.trim(),
       cicloId: cicloId,
+      creditos: creditos,
     );
 
     await ref.set(curso.toMap());
@@ -49,16 +51,21 @@ class CursosService {
   Future<void> actualizarCurso(
     String uid,
     Curso curso,
-    String nombre,
-  ) async {
+    String nombre, {
+    int? creditos,
+  }) async {
+    final datos = <String, dynamic>{
+      'nombre': nombre.trim(),
+    };
+    if (creditos != null) {
+      datos['creditos'] = creditos;
+    }
     await _firestore
         .collection('usuarios')
         .doc(uid)
         .collection('cursos')
         .doc(curso.id)
-        .update({
-      'nombre': nombre.trim(),
-    });
+        .update(datos);
   }
 
   Future<void> eliminarCurso(

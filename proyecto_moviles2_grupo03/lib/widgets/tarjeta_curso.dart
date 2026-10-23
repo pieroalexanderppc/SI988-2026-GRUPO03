@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/calculos_multinivel.dart';
 import '../theme/app_theme.dart';
 import '../theme/estado_nota_colors.dart';
 import '../utils/formato_nota.dart';
@@ -10,10 +11,14 @@ import 'chip_estado.dart';
 class TarjetaCurso extends StatelessWidget {
   final String nombre;
   final double? nota;
+  final int creditos;
 
   /// Porcentaje del curso evaluado (0-100).
   final double pctEvaluado;
   final bool cargando;
+
+  /// Como va el curso si aun faltan notas (no se da por aprobado).
+  final AvanceCurso? avance;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -21,9 +26,11 @@ class TarjetaCurso extends StatelessWidget {
     super.key,
     required this.nombre,
     required this.nota,
+    this.creditos = 3,
     required this.pctEvaluado,
     required this.onTap,
     this.cargando = false,
+    this.avance,
     this.onLongPress,
   });
 
@@ -67,10 +74,26 @@ class TarjetaCurso extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '$creditos cr.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(3),
                           child: SizedBox(
-                            width: 64,
+                            width: 56,
                             height: 5,
                             child: LinearProgressIndicator(
                               value: (pctEvaluado / 100).clamp(0.0, 1.0),
@@ -82,12 +105,13 @@ class TarjetaCurso extends StatelessWidget {
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
-                            sinNotas ? 'Sin notas todavía' : '$evaluado% evaluado',
+                            sinNotas ? 'Sin notas' : '$evaluado% evaluado',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w500,
                               color: scheme.onSurfaceVariant,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -114,7 +138,7 @@ class TarjetaCurso extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    ChipEstado(nota: valor),
+                    ChipEstado(nota: valor, avance: avance),
                   ],
                 ),
             ],
@@ -130,7 +154,7 @@ class TarjetaCurso extends StatelessWidget {
     return Semantics(
       button: true,
       label: '$nombre, ${valor == null ? 'sin notas' : 'nota ${FormatoNota.nota(valor)}, '
-          '${enRiesgo ? 'desaprobado' : 'aprobado'}, $evaluado por ciento evaluado'}',
+          '${ChipEstado.textoDe(valor, avance: avance).toLowerCase()}, $evaluado por ciento evaluado'}',
       excludeSemantics: true,
       child: tarjeta,
     );

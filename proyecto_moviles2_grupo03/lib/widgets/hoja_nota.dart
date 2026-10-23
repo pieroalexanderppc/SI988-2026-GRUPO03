@@ -8,10 +8,11 @@ import '../theme/estado_nota_colors.dart';
 import '../utils/formato_nota.dart';
 import 'grupo_tipo_evaluacion.dart';
 
-/// Lo que devuelve la hoja al guardar.
-typedef DatosNota = ({String tipoId, String nombre, double valor});
+/// Lo que devuelve la hoja al guardar. Con [borrar] se pidio borrar la nota editada.
+typedef DatosNota = ({String tipoId, String nombre, double valor, bool borrar});
 
 /// Abre la hoja inferior para agregar o editar una nota (DESIGN.md pantalla 06b).
+/// Al agregar solo se ofrecen los tipos sin nota (una nota por tipo).
 /// Al editar, el tipo de evaluacion no se puede cambiar.
 Future<DatosNota?> mostrarHojaNota(
   BuildContext context, {
@@ -68,6 +69,14 @@ class _HojaNotaState extends State<_HojaNota> {
 
   bool get _editando => widget.nota != null;
 
+  /// Tipos que se muestran: al agregar, solo los que aun no tienen nota.
+  late final List<TipoEvaluacion> _tiposVisibles = _editando
+      ? widget.tipos
+      : [
+          for (final t in widget.tipos)
+            if ((widget.notasPorTipo[t.id] ?? const []).isEmpty || t.id == widget.tipoInicialId) t,
+        ];
+
   static String _formatear(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   double? get _valor => double.tryParse(_valorCtrl.text.trim().replaceAll(',', '.'));
@@ -112,7 +121,14 @@ class _HojaNotaState extends State<_HojaNota> {
       HapticFeedback.mediumImpact();
       return;
     }
-    Navigator.of(context).pop<DatosNota>((tipoId: _tipoId, nombre: _nombreCtrl.text.trim(), valor: _valor!));
+    Navigator.of(context).pop<DatosNota>(
+      (tipoId: _tipoId, nombre: _nombreCtrl.text.trim(), valor: _valor!, borrar: false),
+    );
+  }
+
+  void _borrar() {
+    final nota = widget.nota!;
+    Navigator.of(context).pop<DatosNota>((tipoId: _tipoId, nombre: nota.nombre, valor: nota.valor, borrar: true));
   }
 
   @override
@@ -170,7 +186,7 @@ class _HojaNotaState extends State<_HojaNota> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final t in widget.tipos)
+                for (final t in _tiposVisibles)
                   ChoiceChip(
                     selected: t.id == _tipoId,
                     onSelected: _editando ? null : (_) => setState(() => _tipoId = t.id),
@@ -278,6 +294,17 @@ class _HojaNotaState extends State<_HojaNota> {
                 ),
               ],
             ),
+            if (_editando) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: scheme.error),
+                  onPressed: _borrar,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Borrar nota'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

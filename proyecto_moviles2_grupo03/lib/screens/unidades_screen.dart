@@ -7,6 +7,7 @@ import '../models/curso.dart';
 import '../models/unidad.dart';
 import '../services/calculo_curso_service.dart';
 import '../services/calculos_multinivel.dart';
+import '../services/calculos_prioridades.dart';
 import '../services/cursos_service.dart';
 import '../services/unidades_service.dart';
 import '../theme/app_theme.dart';
@@ -18,10 +19,12 @@ import '../widgets/card_resultado.dart';
 import '../widgets/dialogos.dart';
 import '../widgets/estado_vacio.dart';
 import '../widgets/linea_pesos.dart';
+import '../widgets/prioridades.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_unidad.dart';
 import 'escanear_notas_screen.dart';
 import 'evolucion_screen.dart';
+import 'prioridades_screen.dart';
 import 'simulador_screen.dart';
 import 'tipos_evaluacion_screen.dart';
 
@@ -236,6 +239,20 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
     _actualizarCalculo();
   }
 
+  /// H23: que evaluaciones pesan mas en la nota de este curso.
+  Future<void> _abrirPrioridades() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PrioridadesScreen(
+          vistaInicial: VistaPrioridades.curso,
+          cursoId: widget.cursoId,
+          cursoNombre: _nombre,
+        ),
+      ),
+    );
+    _actualizarCalculo();
+  }
+
   Future<void> _abrirUnidad(Unidad unidad) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -356,6 +373,7 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
     final resultado = _resultado;
     final total = _totalUnidades;
     final tonos = AppTheme.tonosPeso(Theme.of(context).brightness);
+    final principal = resultado == null ? null : CalculosPrioridades.deCurso(resultado.estructuras).principal;
 
     final completo = resultado?.estado == EstadoCalculoCurso.completo;
     final evaluado = FormatoNota.porcentaje(resultado?.porcentajeEvaluado ?? 0);
@@ -367,7 +385,16 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
     } else if (resultado.estado == EstadoCalculoCurso.sinDatos) {
       pie = 'Registra notas en las unidades para ver tu promedio.';
     } else {
-      pie = '$evaluado% del curso evaluado';
+      // Mientras falten notas no se da el curso por aprobado: se dice cuanto falta.
+      final necesaria = resultado.notaNecesariaParaAprobar;
+      final pendiente = FormatoNota.porcentaje(resultado.porcentajePendiente);
+      pie = switch (resultado.avance) {
+        AvanceCurso.asegurado => '$evaluado% evaluado · ya aseguraste el 10.5 aunque falte el $pendiente%',
+        AvanceCurso.sinOpcion => '$evaluado% evaluado · ni con 20 en el $pendiente% que falta llegarías a 10.5',
+        _ when necesaria != null =>
+          '$evaluado% evaluado · necesitas ${FormatoNota.nota(necesaria)} en el $pendiente% que falta para aprobar',
+        _ => '$evaluado% del curso evaluado',
+      };
     }
 
     return [
@@ -375,6 +402,7 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
         nota: resultado?.notaActual,
         titulo: completo ? 'Nota final del curso' : 'Promedio parcial',
         pie: pie,
+        avance: resultado?.avance,
       ),
       // H14: si falta informacion se dice que falta, sin dar la nota como final.
       if (resultado != null && !completo && resultado.estado != EstadoCalculoCurso.sinDatos) ...[
@@ -403,6 +431,10 @@ class _UnidadesScreenState extends State<UnidadesScreen> {
           child: LinearProgressIndicator(minHeight: 2),
         ),
       const SizedBox(height: 16),
+      if (principal != null) ...[
+        TarjetaPrioridad(principal: principal, onTap: _abrirPrioridades),
+        const SizedBox(height: 12),
+      ],
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),

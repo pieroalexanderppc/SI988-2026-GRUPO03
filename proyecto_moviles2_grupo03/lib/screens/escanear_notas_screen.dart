@@ -29,6 +29,10 @@ import '../widgets/seccion_titulo.dart';
 /// Se puede escanear por partes (una foto por unidad): en la vista previa
 /// "Escanear otra parte" agrega mas unidades, y desde un curso ya creado
 /// ([cursoId] distinto de null) las unidades escaneadas se agregan al final.
+///
+/// Desde una unidad existente ([unidadNombre] distinto de null) se lee una sola
+/// unidad y se devuelve como [UnidadDetectada]; la pantalla de la unidad la
+/// guarda dentro de ella, sin crear otra.
 class EscanearNotasScreen extends StatefulWidget {
   final String cicloId;
   final String cicloNombre;
@@ -41,6 +45,10 @@ class EscanearNotasScreen extends StatefulWidget {
   final int unidadesPrevias;
   final double pesoPrevio;
 
+  /// Unidad existente que se llena con lo escaneado (null = crear unidades).
+  final String? unidadNombre;
+  final double? unidadPeso;
+
   const EscanearNotasScreen({
     super.key,
     required this.cicloId,
@@ -49,6 +57,8 @@ class EscanearNotasScreen extends StatefulWidget {
     this.cursoNombre,
     this.unidadesPrevias = 0,
     this.pesoPrevio = 0,
+    this.unidadNombre,
+    this.unidadPeso,
   });
 
   @override
@@ -68,6 +78,7 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
   final List<_UnidadEditable> _unidades = [];
 
   bool get _agregaACurso => widget.cursoId != null;
+  bool get _llenaUnidad => widget.unidadNombre != null;
 
   @override
   void dispose() {
@@ -151,9 +162,23 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     );
   }
 
+  /// En modo unidad: si la foto trae varias unidades se usa la del mismo numero
+  /// ("Unidad 2" -> la segunda) o la primera. Conserva el nombre de la unidad y,
+  /// si el reporte no trae su peso, el que ya tenia.
+  UnidadDetectada _unidadParaLlenar(List<UnidadDetectada> leidas) {
+    final numero = int.tryParse(RegExp(r'\d+').firstMatch(widget.unidadNombre!)?.group(0) ?? '');
+    final elegida = leidas.length > 1 && numero != null && numero >= 1 && numero <= leidas.length
+        ? leidas[numero - 1]
+        : leidas.first;
+    return elegida
+      ..nombre = widget.unidadNombre!
+      ..peso = elegida.peso ?? widget.unidadPeso;
+  }
+
   /// Numera "Unidad N" en orden, contando las que el curso ya tiene.
   /// Respeta los nombres que el usuario escribio a mano.
   void _renumerar() {
+    if (_llenaUnidad) return;
     for (var i = 0; i < _unidades.length; i++) {
       final ctrl = _unidades[i].nombre;
       if (ctrl.text.trim().isEmpty || RegExp(r'^Unidad \d+$').hasMatch(ctrl.text.trim())) {
@@ -205,7 +230,8 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     });
     _unidades
       ..clear()
-      ..addAll(reporte.unidades.map((u) => _UnidadEditable.desde(u, _refrescar)));
+      ..addAll((_llenaUnidad ? [_unidadParaLlenar(reporte.unidades)] : reporte.unidades)
+          .map((u) => _UnidadEditable.desde(u, _refrescar)));
     _renumerar();
     _cursoCtrl.text = _agregaACurso ? (widget.cursoNombre ?? '') : _formatearCurso(reporte.curso ?? '');
     setState(() => _fase = _Fase.revision);
@@ -308,6 +334,10 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
     if (uid == null || _errores.isNotEmpty) return;
     final nombreCurso = _cursoCtrl.text.trim();
 
+    if (_llenaUnidad) {
+      Navigator.of(context).pop(_unidades.first.aDetectada());
+      return;
+    }
     setState(() => _fase = _Fase.guardando);
     if (_agregaACurso) {
       try {
@@ -412,7 +442,9 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
       child: Scaffold(
         appBar: AppBarNivel(
           padre: _agregaACurso ? (widget.cursoNombre ?? widget.cicloNombre) : widget.cicloNombre,
-          titulo: enRevision ? 'Revisa las notas' : (_agregaACurso ? 'Escanear unidades' : 'Escanear notas'),
+          titulo: enRevision
+              ? 'Revisa las notas'
+              : (_llenaUnidad ? 'Escanear ${widget.unidadNombre}' : (_agregaACurso ? 'Escanear unidades' : 'Escanear notas')),
           acciones: [
             if (enRevision)
               IconButton(
@@ -619,7 +651,16 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
               lineas: const ['Toca cualquier valor para corregirlo. Las notas vacías quedan como pendientes.'],
             ),
           const SizedBox(height: 18),
-          if (_agregaACurso)
+          if (_llenaUnidad)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                'Se guardará en ${widget.unidadNombre} de ${widget.cursoNombre}. '
+                'Si la unidad ya tenía tipos de evaluación, se reemplazan.',
+                style: TextStyle(fontSize: 15, color: scheme.onSurfaceVariant),
+              ),
+            )
+          else if (_agregaACurso)
             Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Text(
@@ -662,24 +703,26 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          OutlinedButton.icon(
-            onPressed: _escanearOtraParte,
-            icon: const Icon(Icons.document_scanner_rounded),
-            label: const Text('Escanear otra parte'),
-          ),
-          const SizedBox(height: 10),
-          BotonPunteado(
-            texto: 'Agregar unidad a mano',
-            onPressed: () => setState(
-              () => _unidades.add(_UnidadEditable.desde(
-                UnidadDetectada(
-                  nombre: 'Unidad ${widget.unidadesPrevias + _unidades.length + 1}',
-                  criterios: [CriterioDetectado(nombre: 'Evaluacion 01')],
-                ),
-                _refrescar,
-              )),
+          if (!_llenaUnidad) ...[
+            OutlinedButton.icon(
+              onPressed: _escanearOtraParte,
+              icon: const Icon(Icons.document_scanner_rounded),
+              label: const Text('Escanear otra parte'),
             ),
-          ),
+            const SizedBox(height: 10),
+            BotonPunteado(
+              texto: 'Agregar unidad a mano',
+              onPressed: () => setState(
+                () => _unidades.add(_UnidadEditable.desde(
+                  UnidadDetectada(
+                    nombre: 'Unidad ${widget.unidadesPrevias + _unidades.length + 1}',
+                    criterios: [CriterioDetectado(nombre: 'Evaluacion 01')],
+                  ),
+                  _refrescar,
+                )),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -703,7 +746,9 @@ class _EscanearNotasScreenState extends State<EscanearNotasScreen> {
             icon: guardando
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5))
                 : const Icon(Icons.save_rounded),
-            label: Text(guardando ? 'Guardando…' : 'Guardar curso y notas'),
+            label: Text(guardando
+                ? 'Guardando…'
+                : (_llenaUnidad ? 'Guardar en ${widget.unidadNombre}' : 'Guardar curso y notas')),
           ),
         ),
       ),

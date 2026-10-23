@@ -8,6 +8,8 @@ import '../models/tipo_evaluacion.dart';
 import '../models/unidad.dart';
 import '../services/calculos_evaluaciones.dart';
 import '../services/evaluaciones_service.dart';
+import '../services/importacion_notas_service.dart';
+import '../services/lector_reporte_notas.dart';
 import '../services/unidades_service.dart';
 import '../utils/formato_nota.dart';
 import '../widgets/app_bar_nivel.dart';
@@ -21,6 +23,7 @@ import '../widgets/hoja_nota.dart';
 import '../widgets/hoja_simulador_unidad.dart';
 import '../widgets/linea_pesos.dart';
 import '../widgets/seccion_titulo.dart';
+import 'escanear_notas_screen.dart';
 
 /// Pantalla 06 - Detalle de unidad: tipos de evaluacion y notas (H13).
 ///
@@ -129,6 +132,12 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
           e.key: e.value.where((n) => !_ocultas.contains(n.id)).toList(),
       };
 
+  /// Primer tipo que aun no tiene nota (para el boton "+ Nota").
+  String? get _primerTipoSinNota {
+    final notas = _notasVisibles;
+    return _tipos.where((t) => (notas[t.id] ?? const []).isEmpty).firstOrNull?.id;
+  }
+
   void _mostrarMensaje(String texto, {SnackBarAction? accion}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -188,6 +197,55 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
     }
   }
 
+  // --- Escaner (H19) ---
+
+  /// Escanea el reporte del portal y guarda sus criterios dentro de esta unidad.
+  Future<void> _escanearUnidad() async {
+    final uid = _uid;
+    if (uid == null) return;
+    if (_tipos.isNotEmpty) {
+      final ok = await confirmarEliminar(
+        context,
+        titulo: 'Reemplazar tipos de evaluación',
+        mensaje: 'Lo que escanees reemplazará los ${_tipos.length} tipos actuales de $_nombre y sus notas.',
+      );
+      if (!ok || !mounted) return;
+    }
+    final leida = await Navigator.of(context).push<UnidadDetectada>(
+      MaterialPageRoute(
+        builder: (_) => EscanearNotasScreen(
+          cicloId: '',
+          cicloNombre: 'Curso',
+          cursoId: widget.cursoId,
+          cursoNombre: widget.cursoNombre,
+          unidadNombre: _nombre,
+          unidadPeso: _porcentaje,
+        ),
+      ),
+    );
+    if (leida == null || !mounted) return;
+    final peso = leida.peso;
+    if (peso != null) setState(() => _porcentaje = peso);
+    try {
+      await ImportacionNotasService()
+          .llenarUnidad(
+            uid: uid,
+            cursoId: widget.cursoId,
+            unidadId: widget.unidadId,
+            unidad: leida,
+            tiposAnteriores: {
+              for (final t in _tipos) t.id: [for (final n in _notasPorTipo[t.id] ?? const <Nota>[]) n.id],
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+      if (mounted) _mostrarMensaje('Notas de $_nombre guardadas.');
+    } on TimeoutException {
+      if (mounted) _mostrarMensaje('Guardado en este teléfono. Se subirá a tu cuenta cuando haya conexión.');
+    } catch (_) {
+      if (mounted) _mostrarMensaje('No se pudo guardar lo escaneado.');
+    }
+  }
+
   // --- Tipos de evaluacion ---
 
   double get _totalTipos => CalculosEvaluaciones.calcularTotalPorcentaje(_tipos);
@@ -195,24 +253,40 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
   Future<void> _crearOEditarTipo({TipoEvaluacion? tipo}) async {
     final uid = _uid;
     if (uid == null) return;
-    final r = await pedirNombreYPeso(
+    // Una nota por tipo: se edita junto con el nombre y el peso. Si quedaron
+    // varias de versiones anteriores, esas se editan en su lista.
+    final notas = tipo == null ? const <Nota>[] : (_notasVisibles[tipo.id] ?? const <Nota>[]);
+    final unica = notas.length == 1 ? notas.first : null;
+    final r = await pedirComponente(
       context,
       titulo: tipo == null ? 'Nuevo tipo de evaluación' : 'Editar tipo de evaluación',
-      etiquetaNombre: 'Nombre',
-      hintNombre: 'Ej. Laboratorio, Examen',
       inicialNombre: tipo?.nombre ?? '',
       inicialPeso: tipo?.porcentaje,
+      inicialNota: unica?.valor,
       pesoDisponible: 100 - _totalTipos + (tipo?.porcentaje ?? 0),
       textoBoton: tipo == null ? 'Crear' : 'Guardar',
+      conNota: notas.length <= 1,
     );
     if (r == null) return;
     try {
-      if (tipo == null) {
-        await _service.crearTipoEvaluacion(uid, widget.cursoId, widget.unidadId, r.nombre, r.peso);
-      } else {
-        await _service.actualizarTipoEvaluacion(uid, widget.cursoId, widget.unidadId, tipo, r.nombre, r.peso);
-      }
-      if (mounted) _mostrarMensaje(tipo == null ? 'Tipo de evaluación creado.' : 'Tipo de evaluación actualizado.');
+      // Sin conexion el cambio ya se ve en la pantalla (cache local), pero el
+      // servidor no confirma: no se espera indefinidamente.
+      await _service
+          .guardarComponente(
+            uid,
+            widget.cursoId,
+            widget.unidadId,
+            tipo: tipo,
+            nombre: r.nombre,
+            porcentaje: r.peso,
+            notaActual: unica,
+            nota: r.nota,
+            conNota: notas.length <= 1,
+          )
+          .timeout(const Duration(seconds: 8));
+      if (mounted) _mostrarMensaje(tipo == null ? 'Tipo de evaluación creado.' : 'Cambios guardados.');
+    } on TimeoutException {
+      if (mounted) _mostrarMensaje('Guardado en este teléfono. Se subirá a tu cuenta cuando haya conexión.');
     } catch (_) {
       if (mounted) _mostrarMensaje('No se pudo guardar el tipo de evaluación.');
     }
@@ -271,11 +345,16 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
       context,
       tipos: _tipos,
       notasPorTipo: _notasVisibles,
-      tipoInicialId: tipoId ?? _expandido ?? _tipos.first.id,
+      tipoInicialId: tipoId ?? _primerTipoSinNota ?? _tipos.first.id,
       subtitulo: '$_nombre · ${widget.cursoNombre}',
       nota: nota,
     );
     if (r == null) return;
+    if (r.borrar && nota != null) {
+      final tipo = _tipos.where((t) => t.id == r.tipoId).firstOrNull;
+      if (tipo != null) await _eliminarNota(tipo, nota);
+      return;
+    }
     try {
       if (nota == null) {
         await _service.crearNota(uid, widget.cursoId, widget.unidadId, r.tipoId, r.valor, nombre: r.nombre);
@@ -350,6 +429,11 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
               context,
               titulo: _nombre,
               opciones: [
+                OpcionMenu(
+                  icono: Icons.document_scanner_rounded,
+                  texto: 'Escanear del portal',
+                  onTap: _escanearUnidad,
+                ),
                 OpcionMenu(icono: Icons.edit_rounded, texto: 'Editar unidad', onTap: _editarUnidad),
                 OpcionMenu(
                   icono: Icons.delete_outline_rounded,
@@ -375,7 +459,7 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
                       subtitulo: 'Vale ${FormatoNota.porcentaje(_porcentaje)}% del curso',
                     ),
                     const SizedBox(height: 22),
-                    if (_tipos.isEmpty)
+                    if (_tipos.isEmpty) ...[
                       EstadoVacio(
                         icono: Icons.quiz_rounded,
                         titulo: 'Agrega cómo te evalúan',
@@ -383,9 +467,15 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
                             'proyecto...) con su peso, y luego sus notas.',
                         textoBoton: 'Agregar tipo de evaluación',
                         onPressed: _crearOEditarTipo,
-                        tip: 'Si un tipo tiene varias notas, Pondera las promedia antes de aplicar su peso.',
-                      )
-                    else ...[
+                        tip: 'Cada tipo lleva la nota que sale en el portal. Si aún no la tienes, déjala vacía.',
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _escanearUnidad,
+                        icon: const Icon(Icons.document_scanner_rounded),
+                        label: const Text('Escanear del portal'),
+                      ),
+                    ] else ...[
                       SeccionTitulo('Tipos de evaluación', trailing: LineaPesos(suma: total, compacta: true)),
                       const SizedBox(height: 10),
                       Padding(
@@ -401,7 +491,6 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
                           promedio: CalculosEvaluaciones.calcularPromedioTipo(notas[tipo.id] ?? const []),
                           expandido: _expandido == tipo.id,
                           onToggle: () => setState(() => _expandido = _expandido == tipo.id ? null : tipo.id),
-                          onAgregar: () => _abrirHojaNota(tipoId: tipo.id),
                           onEditarNota: (n) => _abrirHojaNota(tipoId: tipo.id, nota: n),
                           onEliminarNota: (n) => _eliminarNota(tipo, n),
                           onEditarTipo: () => _crearOEditarTipo(tipo: tipo),
@@ -414,13 +503,6 @@ class _TiposEvaluacionScreenState extends State<TiposEvaluacionScreen> {
                     ],
                   ],
                 ),
-      floatingActionButton: _tipos.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _abrirHojaNota(),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Nota'),
-            ),
     );
   }
 }

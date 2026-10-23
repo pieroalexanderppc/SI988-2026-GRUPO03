@@ -9,11 +9,15 @@ import 'calculos_multinivel.dart';
 class ResumenCiclo {
   final int cantidadCursos;
   final int cursosConNotas;
+  final int totalCreditos;
+  final int creditosEvaluados;
   final double? promedio;
 
   const ResumenCiclo({
     required this.cantidadCursos,
     required this.cursosConNotas,
+    this.totalCreditos = 0,
+    this.creditosEvaluados = 0,
     required this.promedio,
   });
 }
@@ -97,26 +101,53 @@ class CalculoCursoService {
     };
   }
 
-  /// Promedio de las notas actuales de los cursos que tienen notas.
-  static double? promedioDeCursos(
-    Iterable<ResultadoCalculoCurso> resultados,
-  ) {
-    final notas = resultados
-        .map((resultado) => resultado.notaActual)
-        .whereType<double>()
-        .toList();
+  /// Promedio ponderado por créditos de los cursos que tienen notas (H21).
+  /// Si un curso no tiene créditos especificados o es <= 0, toma 3 por defecto.
+  /// Retorna null si no hay cursos con notas.
+  static double? promedioPonderadoCiclo({
+    required List<Curso> cursos,
+    required Map<String, ResultadoCalculoCurso> resultados,
+  }) {
+    double sumaPonderada = 0.0;
+    int sumaCreditos = 0;
 
-    if (notas.isEmpty) return null;
+    for (final curso in cursos) {
+      final res = resultados[curso.id];
+      final nota = res?.notaActual;
+      if (nota != null) {
+        final cr = curso.creditosEfectivos;
+        sumaPonderada += (nota * cr);
+        sumaCreditos += cr;
+      }
+    }
 
-    final suma = notas.fold<double>(
-      0.0,
-      (acumulado, nota) => acumulado + nota,
-    );
-
-    return CalculosMultinivel.redondearUnDecimal(suma / notas.length);
+    if (sumaCreditos == 0) return null;
+    return CalculosMultinivel.redondearUnDecimal(sumaPonderada / sumaCreditos);
   }
 
-  /// Obtiene el resumen de un ciclo.
+  /// Suma de los créditos matriculados de los cursos (H21).
+  static int totalCreditos(Iterable<Curso> cursos) =>
+      cursos.fold<int>(0, (acc, c) => acc + c.creditosEfectivos);
+
+  /// Promedio acumulado de varios ciclos, ponderado por los créditos
+  /// evaluados de cada uno (H21). Retorna null si ningún ciclo tiene notas.
+  static double? promedioAcumulado(Iterable<ResumenCiclo> resumenes) {
+    double sumaPonderada = 0.0;
+    int sumaCreditos = 0;
+
+    for (final r in resumenes) {
+      final promedio = r.promedio;
+      if (promedio != null && r.creditosEvaluados > 0) {
+        sumaPonderada += promedio * r.creditosEvaluados;
+        sumaCreditos += r.creditosEvaluados;
+      }
+    }
+
+    if (sumaCreditos == 0) return null;
+    return CalculosMultinivel.redondearUnDecimal(sumaPonderada / sumaCreditos);
+  }
+
+  /// Obtiene el resumen de un ciclo con promedio ponderado por créditos.
   Future<ResumenCiclo> obtenerResumenCiclo(
     String uid,
     String cicloId,
@@ -134,7 +165,14 @@ class CalculoCursoService {
       cantidadCursos: cursos.length,
       cursosConNotas:
           resultados.values.where((r) => r.notaActual != null).length,
-      promedio: promedioDeCursos(resultados.values),
+      totalCreditos: totalCreditos(cursos),
+      creditosEvaluados: totalCreditos(
+        cursos.where((c) => resultados[c.id]?.notaActual != null),
+      ),
+      promedio: promedioPonderadoCiclo(
+        cursos: cursos,
+        resultados: resultados,
+      ),
     );
   }
 }

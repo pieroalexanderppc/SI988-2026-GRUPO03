@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../models/ciclo.dart';
 import '../services/calculo_curso_service.dart';
-import '../services/calculos_multinivel.dart';
 import '../services/ciclos_service.dart';
 import '../widgets/card_resultado.dart';
 import '../widgets/dialogos.dart';
@@ -198,7 +197,9 @@ class _CiclosScreenState extends State<CiclosScreen> {
                         final r = resumen.data;
                         final cursos = r == null
                             ? 'Cargando cursos…'
-                            : (r.cantidadCursos == 1 ? '1 curso' : '${r.cantidadCursos} cursos');
+                            : r.cantidadCursos == 0
+                                ? 'Sin cursos'
+                                : '${r.cantidadCursos == 1 ? '1 curso' : '${r.cantidadCursos} cursos'} · ${r.totalCreditos} créditos';
                         return TarjetaCiclo(
                           numero: ciclos.length - i,
                           nombre: ciclos[i].nombre,
@@ -239,7 +240,7 @@ class _CiclosScreenState extends State<CiclosScreen> {
   }
 }
 
-/// Promedio acumulado: promedio simple de los ciclos que tienen notas.
+/// Promedio acumulado: ciclos con notas ponderados por sus créditos evaluados (H21).
 class _PromedioAcumulado extends StatelessWidget {
   final List<Future<ResumenCiclo>> resumenes;
 
@@ -254,10 +255,7 @@ class _PromedioAcumulado extends StatelessWidget {
         if (datos == null) {
           return const CardResultado(nota: null, titulo: 'Promedio acumulado', subtitulo: 'Calculando…');
         }
-        final promedios = datos.map((r) => r.promedio).whereType<double>().toList();
-        final promedio = promedios.isEmpty
-            ? null
-            : CalculosMultinivel.redondearUnDecimal(promedios.reduce((a, b) => a + b) / promedios.length);
+        final promedio = CalculoCursoService.promedioAcumulado(datos);
         final registrados = datos.length == 1 ? '1 ciclo registrado' : '${datos.length} ciclos registrados';
         return CardResultado(
           nota: promedio,

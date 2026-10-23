@@ -133,6 +133,9 @@ class ResultadoCalculoCurso {
   /// Unidades del curso en el orden en que se muestran (Unidad 1, 2, 3...).
   final List<Unidad> unidades;
 
+  /// Estructura usada en el cálculo (unidades, tipos y notas), para H23.
+  final List<EstructuraUnidad> estructuras;
+
   const ResultadoCalculoCurso({
     this.notaFinal,
     this.notaAcumulada,
@@ -145,6 +148,7 @@ class ResultadoCalculoCurso {
     this.promedioParcialPorUnidad = const {},
     this.notasRegistradasPorUnidad = const {},
     this.unidades = const [],
+    this.estructuras = const [],
   });
 
   /// Nota a mostrar: la final si el calculo esta completo, si no el promedio parcial.
@@ -156,6 +160,44 @@ class ResultadoCalculoCurso {
     if (valor == null) return false;
     return valor >= 10.5;
   }
+
+  /// Parte del curso que aún no tiene notas (0-100).
+  double get porcentajePendiente => (100 - porcentajeEvaluado).clamp(0.0, 100.0);
+
+  /// Nota que hace falta en lo pendiente para terminar con 10.5.
+  /// `null` si el curso está completo o aún no tiene notas.
+  /// <= 0 significa que ya está asegurado; > 20, que ya no se alcanza.
+  double? get notaNecesariaParaAprobar {
+    final acumulada = notaAcumulada;
+    final pendiente = porcentajePendiente;
+    if (estado == EstadoCalculoCurso.completo || acumulada == null || pendiente <= 0) return null;
+    return CalculosMultinivel.redondearUnDecimal((10.5 - acumulada) / (pendiente / 100.0));
+  }
+
+  /// Situación del curso mientras faltan notas; `null` si está completo o sin notas.
+  AvanceCurso? get avance {
+    final necesaria = notaNecesariaParaAprobar;
+    final parcial = promedioParcial;
+    if (necesaria == null || parcial == null) return null;
+    if (necesaria <= 0) return AvanceCurso.asegurado;
+    if (necesaria > 20) return AvanceCurso.sinOpcion;
+    return parcial >= 10.5 ? AvanceCurso.vasAprobando : AvanceCurso.enRiesgo;
+  }
+}
+
+/// Cómo va un curso que todavía tiene evaluaciones pendientes.
+enum AvanceCurso {
+  /// Lo acumulado ya llega a 10.5.
+  asegurado,
+
+  /// El promedio de lo evaluado está sobre 10.5.
+  vasAprobando,
+
+  /// El promedio de lo evaluado está bajo 10.5, pero aún se puede aprobar.
+  enRiesgo,
+
+  /// Ni con 20 en lo pendiente se llega a 10.5.
+  sinOpcion,
 }
 
 /// Lógica de cálculo multinivel para promedios de curso:
@@ -173,6 +215,13 @@ class CalculosMultinivel {
       if (c != 0) return c;
     }
     return pa.length.compareTo(pb.length);
+  }
+
+  /// '"Unidad 2"', '"Unidad 2" y "Unidad 3"', '"U1", "U2" y "U3"'.
+  static String _listar(List<String> nombres) {
+    final citados = [for (final n in nombres) '"$n"'];
+    if (citados.length == 1) return citados.first;
+    return '${citados.sublist(0, citados.length - 1).join(', ')} y ${citados.last}';
   }
 
   /// Redondea un valor numérico a un decimal según el criterio de aceptación.
@@ -218,10 +267,12 @@ class CalculosMultinivel {
     bool algunaNotaRegistrada = false;
     final Map<String, double?> promedioParcialPorUnidad = {};
     final Map<String, int> notasRegistradasPorUnidad = {};
-    final unidadesOrdenadas = [for (final u in unidades) u.unidad]
-      ..sort((a, b) => _compararNatural(a.nombre, b.nombre));
+    // En orden natural para que los avisos salgan como Unidad 1, 2, 3...
+    final ordenadas = [...unidades]..sort((a, b) => _compararNatural(a.unidad.nombre, b.unidad.nombre));
+    final unidadesOrdenadas = [for (final u in ordenadas) u.unidad];
+    final List<String> unidadesSinTipos = [];
 
-    for (final estUnidad in unidades) {
+    for (final estUnidad in ordenadas) {
       final uId = estUnidad.unidad.id;
       final uNombre = estUnidad.unidad.nombre;
       final notaUnidad = estUnidad.notaCalculada;
@@ -234,7 +285,7 @@ class CalculosMultinivel {
           estUnidad.unidad.porcentaje * (estUnidad.porcentajeTiposEvaluados / 100.0);
 
       if (estUnidad.tipos.isEmpty) {
-        motivosIncompletos.add('Falta registrar tipos de evaluación en "$uNombre".');
+        unidadesSinTipos.add(uNombre);
       } else if (!estUnidad.porcentajesTiposValidos) {
         motivosIncompletos.add(
           'Los tipos de evaluación en "$uNombre" deben sumar 100% (actualmente ${estUnidad.totalPorcentajeTipos.toStringAsFixed(1)}%).',
@@ -259,6 +310,15 @@ class CalculosMultinivel {
       }
     }
 
+    // Un solo aviso para todas las unidades sin tipos: "Unidad 2" y "Unidad 3".
+    if (unidadesSinTipos.isNotEmpty) {
+      motivosIncompletos.add(
+        'Falta registrar tipos de evaluación en ${_listar(unidadesSinTipos)}.',
+      );
+    }
+    // Se muestran todos los motivos, uno por línea.
+    final mensajeIncompleto = motivosIncompletos.join('\n');
+
     // Si no hay ninguna nota en todo el curso
     if (!algunaNotaRegistrada) {
       return ResultadoCalculoCurso(
@@ -266,13 +326,14 @@ class CalculosMultinivel {
         notaAcumulada: null,
         estado: EstadoCalculoCurso.sinDatos,
         mensajeEstado: motivosIncompletos.isNotEmpty
-            ? motivosIncompletos.first
+            ? mensajeIncompleto
             : 'No hay notas registradas en este curso.',
         notasPorUnidad: notasPorUnidad,
         unidadCompleta: unidadCompleta,
         promedioParcialPorUnidad: promedioParcialPorUnidad,
         notasRegistradasPorUnidad: notasRegistradasPorUnidad,
         unidades: unidadesOrdenadas,
+        estructuras: unidades,
       );
     }
 
@@ -287,7 +348,7 @@ class CalculosMultinivel {
         notaFinal: null,
         notaAcumulada: redondearUnDecimal(sumaPonderadaCurso),
         estado: EstadoCalculoCurso.incompleto,
-        mensajeEstado: motivosIncompletos.first,
+        mensajeEstado: mensajeIncompleto,
         notasPorUnidad: notasPorUnidad,
         unidadCompleta: unidadCompleta,
         promedioParcial: promedioParcial,
@@ -295,6 +356,7 @@ class CalculosMultinivel {
         promedioParcialPorUnidad: promedioParcialPorUnidad,
         notasRegistradasPorUnidad: notasRegistradasPorUnidad,
         unidades: unidadesOrdenadas,
+        estructuras: unidades,
       );
     }
 
@@ -313,6 +375,7 @@ class CalculosMultinivel {
       promedioParcialPorUnidad: promedioParcialPorUnidad,
       notasRegistradasPorUnidad: notasRegistradasPorUnidad,
       unidades: unidadesOrdenadas,
+      estructuras: unidades,
     );
   }
 }

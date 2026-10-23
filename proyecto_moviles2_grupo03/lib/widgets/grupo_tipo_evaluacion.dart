@@ -21,17 +21,22 @@ IconData iconoTipoEvaluacion(String nombre) {
 String nombreDeNota(Nota nota, int indice) =>
     nota.nombre.trim().isEmpty ? 'Nota $indice' : nota.nombre.trim();
 
-/// Grupo desplegable de un tipo de evaluacion con sus notas
-/// (DESIGN.md seccion 6, pantalla 06). Solo uno abierto a la vez lo decide el padre.
+/// Tarjeta de un tipo de evaluacion (componente) con sus notas
+/// (DESIGN.md seccion 6, pantalla 06).
+///
+/// Cada componente tiene una nota, como en el portal. Al tocarlo se edita
+/// todo junto (nombre, peso y nota). Si quedaron varias notas de versiones
+/// anteriores, la tarjeta se despliega para verlas y se usa su promedio.
 class GrupoTipoEvaluacion extends StatelessWidget {
   final TipoEvaluacion tipo;
   final List<Nota> notas;
   final double? promedio;
   final bool expandido;
   final VoidCallback onToggle;
-  final VoidCallback onAgregar;
   final ValueChanged<Nota> onEditarNota;
   final ValueChanged<Nota> onEliminarNota;
+
+  /// Edita el tipo completo: nombre, peso y su nota.
   final VoidCallback onEditarTipo;
   final VoidCallback onEliminarTipo;
 
@@ -42,7 +47,6 @@ class GrupoTipoEvaluacion extends StatelessWidget {
     required this.promedio,
     required this.expandido,
     required this.onToggle,
-    required this.onAgregar,
     required this.onEditarNota,
     required this.onEliminarNota,
     required this.onEditarTipo,
@@ -54,74 +58,133 @@ class GrupoTipoEvaluacion extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final estado = EstadoNotaColors.of(context);
     final duracion = Duration(milliseconds: MediaQuery.disableAnimationsOf(context) ? 0 : 200);
-    final cantidad = notas.length == 1 ? '1 nota' : '${notas.length} notas';
+    final varias = notas.length > 1;
+    final abierto = varias && expandido;
+    final peso = '${FormatoNota.porcentaje(tipo.porcentaje)}%';
+
+    final String detalle;
+    final String pista;
+    final VoidCallback alTocar;
+    if (notas.isEmpty) {
+      detalle = 'Sin nota · toca para ponerla';
+      pista = 'Editar';
+      alTocar = onEditarTipo;
+    } else if (!varias) {
+      detalle = notas.first.nombre.trim();
+      pista = 'Editar';
+      alTocar = onEditarTipo;
+    } else {
+      detalle = 'Promedio de ${notas.length} notas';
+      pista = abierto ? 'Ocultar notas' : 'Ver notas';
+      alTocar = onToggle;
+    }
 
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          Semantics(
-            button: true,
-            expanded: expandido,
-            label: '${tipo.nombre}, ${FormatoNota.porcentaje(tipo.porcentaje)} por ciento, $cantidad, '
-                'promedio ${promedio == null ? 'sin notas' : FormatoNota.nota(promedio)}',
-            excludeSemantics: true,
-            child: InkWell(
-              onTap: onToggle,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(iconoTipoEvaluacion(tipo.nombre), color: scheme.onPrimaryContainer, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  expanded: varias ? abierto : null,
+                  label: '${tipo.nombre}, $peso por ciento, $detalle, '
+                      'nota ${promedio == null ? 'sin registrar' : FormatoNota.nota(promedio)}',
+                  hint: pista,
+                  excludeSemantics: true,
+                  child: InkWell(
+                    onTap: alTocar,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+                      child: Row(
                         children: [
-                          Text(
-                            tipo.nombre,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: scheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(iconoTipoEvaluacion(tipo.nombre), color: scheme.onPrimaryContainer, size: 22),
                           ),
-                          Text(
-                            '${FormatoNota.porcentaje(tipo.porcentaje)}% · $cantidad',
-                            style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tipo.nombre,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                                ),
+                                Text(
+                                  detalle.isEmpty ? peso : '$peso · $detalle',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                                ),
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
+                          Text(
+                            FormatoNota.nota(promedio),
+                            style: AppTheme.estiloNota(22, color: estado.colorDeNota(promedio, scheme.onSurfaceVariant)),
+                          ),
+                          if (varias)
+                            AnimatedRotation(
+                              turns: abierto ? 0.5 : 0,
+                              duration: duracion,
+                              child: SizedBox(
+                                width: 32,
+                                height: 40,
+                                child: Icon(Icons.expand_more_rounded, color: scheme.onSurfaceVariant),
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                    Text(
-                      FormatoNota.nota(promedio),
-                      style: AppTheme.estiloNota(22, color: estado.colorDeNota(promedio, scheme.onSurfaceVariant)),
-                    ),
-                    const SizedBox(width: 4),
-                    AnimatedRotation(
-                      turns: expandido ? 0.5 : 0,
-                      duration: duracion,
-                      child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Icon(Icons.expand_more_rounded, color: scheme.onSurfaceVariant),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              PopupMenuButton<String>(
+                tooltip: 'Opciones de ${tipo.nombre}',
+                icon: Icon(Icons.more_vert_rounded, color: scheme.onSurfaceVariant),
+                onSelected: (opcion) {
+                  if (opcion == 'editar') {
+                    onEditarTipo();
+                  } else {
+                    onEliminarTipo();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'editar',
+                    child: ListTile(
+                      leading: Icon(Icons.edit_rounded),
+                      title: Text('Editar'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'eliminar',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline_rounded),
+                      title: Text('Eliminar'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           AnimatedSize(
             duration: duracion,
             curve: Curves.easeInOut,
             alignment: Alignment.topCenter,
-            child: !expandido
+            child: !abierto
                 ? const SizedBox(width: double.infinity)
                 : Column(
                     children: [
@@ -135,60 +198,7 @@ class GrupoTipoEvaluacion extends StatelessWidget {
                           onEditar: () => onEditarNota(notas[i]),
                           onEliminar: () => onEliminarNota(notas[i]),
                         ),
-                      if (notas.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Aún no hay notas en este tipo.',
-                              style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-                            ),
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: onAgregar,
-                                  icon: const Icon(Icons.add_rounded),
-                                  label: Text(
-                                    'Agregar ${tipo.nombre.toLowerCase()}',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            PopupMenuButton<String>(
-                              tooltip: 'Opciones de ${tipo.nombre}',
-                              icon: Icon(Icons.more_horiz_rounded, color: scheme.onSurfaceVariant),
-                              onSelected: (opcion) => opcion == 'editar' ? onEditarTipo() : onEliminarTipo(),
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'editar',
-                                  child: ListTile(
-                                    leading: Icon(Icons.edit_rounded),
-                                    title: Text('Editar tipo'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'eliminar',
-                                  child: ListTile(
-                                    leading: Icon(Icons.delete_outline_rounded),
-                                    title: Text('Eliminar tipo'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                      const SizedBox(height: 4),
                     ],
                   ),
           ),
