@@ -111,5 +111,26 @@ void main() {
 
       expect(promedio, isNull);
     });
+
+    test('Suma créditos usando 3 cuando el valor guardado no es válido', () {
+      final cursos = [
+        Curso(id: 'c1', nombre: 'Redes', cicloId: 'ciclo1', creditos: 4),
+        Curso(id: 'c2', nombre: 'Ética', cicloId: 'ciclo1', creditos: 0),
+      ];
+
+      expect(CalculoCursoService.totalCreditos(cursos), 7);
+    });
+
+    test('Promedio acumulado pondera cada ciclo por sus créditos evaluados', () {
+      const resumenes = [
+        ResumenCiclo(cantidadCursos: 5, cursosConNotas: 5, totalCreditos: 20, creditosEvaluados: 20, promedio: 15.0),
+        ResumenCiclo(cantidadCursos: 2, cursosConNotas: 2, totalCreditos: 6, creditosEvaluados: 6, promedio: 11.0),
+        ResumenCiclo(cantidadCursos: 3, cursosConNotas: 0, totalCreditos: 9, creditosEvaluados: 0, promedio: null),
+      ];
+
+      // (15 * 20 + 11 * 6) / 26 = 366 / 26 = 14.07... -> 14.1 (el promedio simple daría 13.0)
+      expect(CalculoCursoService.promedioAcumulado(resumenes), 14.1);
+      expect(CalculoCursoService.promedioAcumulado(const []), isNull);
+    });
   });
 }
