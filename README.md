@@ -84,6 +84,7 @@ La escala es vigesimal (0 a 20) y la nota mínima aprobatoria es **10.5**.
 | **Simuladores** | "¿Qué nota necesito?" por unidad y por curso: nota necesaria en lo pendiente, máximo alcanzable y metas imposibles. Tarjeta interactiva con el promedio proyectado. |
 | **Escáner de notas** | Foto o captura del portal → recorte → reconocimiento de texto **en el dispositivo** → vista previa editable → guardado. Permite escanear por partes (una unidad por foto). |
 | **Gráficos de evolución** | Línea de notas por unidad y barras comparando los cursos del ciclo, con la referencia de 10.5. |
+| **Prioridades** | Ranking de evaluaciones por su peso real en el curso (peso del tipo × peso de la unidad) y en el ciclo (por créditos), con el impacto de cada punto. Mientras faltan notas el curso no se da por aprobado: indica "Asegurado", "Vas aprobando" o "En riesgo" y la nota que necesitas en lo pendiente. |
 | **Diseño** | Material 3, tema claro y oscuro, tipografía propia, estados aprobado/desaprobado siempre con ícono y texto, microinteracciones y accesibilidad (lectores de pantalla, áreas táctiles de 48 px). |
 | **Seguridad** | Reglas de Firestore: cada usuario solo lee y escribe sus propios datos, y solo con el correo verificado. |
 
@@ -414,6 +415,7 @@ SI988-2026-GRUPO03/
 | H19 | Registro de notas por cámara desde el reporte del portal | Completada |
 | H20 | Pantalla de gráficos de evolución | Completada |
 | H21 | Promedio del ciclo ponderado por créditos | Completada |
+| H23 | Prioridades: qué evaluaciones pesan más en la nota | En revisión |
 | — | Recordatorios de evaluaciones y notificaciones | En desarrollo |
 
 Mejoras transversales: verificación de correo, rediseño completo según el sistema de diseño

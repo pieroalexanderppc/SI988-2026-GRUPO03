@@ -4,7 +4,60 @@ import 'package:proyecto_moviles2_grupo03/models/tipo_evaluacion.dart';
 import 'package:proyecto_moviles2_grupo03/models/unidad.dart';
 import 'package:proyecto_moviles2_grupo03/services/calculos_multinivel.dart';
 
+EstructuraUnidad _unidadSimple(String id, double peso, double? examen) => EstructuraUnidad(
+      unidad: Unidad(id: id, nombre: 'Unidad $id', cursoId: 'c1', porcentaje: peso),
+      tipos: [
+        EstructuraTipoEvaluacion(
+          tipo: TipoEvaluacion(id: 't$id', nombre: 'Examen', porcentaje: 100),
+          notas: [if (examen != null) Nota(id: 'n$id', valor: examen, tipoEvaluacionId: 't$id')],
+        ),
+      ],
+    );
+
 void main() {
+  group('CalculosMultinivel - Avance del curso con notas pendientes', () {
+    test('Con 25 % evaluado no se da por aprobado: dice cuánto falta', () {
+      final r = CalculosMultinivel.calcular([
+        _unidadSimple('1', 25, 14.3),
+        _unidadSimple('2', 35, null),
+        _unidadSimple('3', 40, null),
+      ]);
+
+      // (10.5 - 3.6) / 0.75 = 9.2
+      expect(r.porcentajePendiente, closeTo(75, 1e-9));
+      expect(r.notaNecesariaParaAprobar, 9.2);
+      expect(r.avance, AvanceCurso.vasAprobando);
+    });
+
+    test('Marca en riesgo, asegurado o sin opción según lo acumulado', () {
+      final riesgo = CalculosMultinivel.calcular([_unidadSimple('1', 50, 8), _unidadSimple('2', 50, null)]);
+      expect(riesgo.avance, AvanceCurso.enRiesgo);
+      expect(riesgo.notaNecesariaParaAprobar, 13);
+
+      final asegurado = CalculosMultinivel.calcular([_unidadSimple('1', 60, 18), _unidadSimple('2', 40, null)]);
+      expect(asegurado.avance, AvanceCurso.asegurado);
+
+      final sinOpcion = CalculosMultinivel.calcular([_unidadSimple('1', 80, 2), _unidadSimple('2', 20, null)]);
+      expect(sinOpcion.avance, AvanceCurso.sinOpcion);
+    });
+
+    test('Avisa de todas las unidades sin tipos en un solo mensaje', () {
+      final r = CalculosMultinivel.calcular([
+        EstructuraUnidad(unidad: Unidad(id: '3', nombre: 'Unidad 3', cursoId: 'c1', porcentaje: 40), tipos: const []),
+        _unidadSimple('1', 25, 14.3),
+        EstructuraUnidad(unidad: Unidad(id: '2', nombre: 'Unidad 2', cursoId: 'c1', porcentaje: 35), tipos: const []),
+      ]);
+
+      expect(r.mensajeEstado, 'Falta registrar tipos de evaluación en "Unidad 2" y "Unidad 3".');
+    });
+
+    test('Curso completo no tiene avance: su estado es final', () {
+      final r = CalculosMultinivel.calcular([_unidadSimple('1', 100, 15)]);
+      expect(r.avance, isNull);
+      expect(r.notaNecesariaParaAprobar, isNull);
+    });
+  });
+
   group('CalculosMultinivel - Cálculo multinivel completo', () {
     test('Calcula correctamente: Promedio Tipo -> Nota Unidad -> Nota Final Curso a 1 decimal', () {
       // Configuración Unidad 1 (50% del curso)
