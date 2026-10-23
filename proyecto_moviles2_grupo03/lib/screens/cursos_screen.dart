@@ -324,10 +324,7 @@ class _CursosScreenState extends State<CursosScreen> {
     bool cargando,
   ) {
     final estado = EstadoNotaColors.of(context);
-    final totalCreditos = cursos.fold<int>(
-      0,
-      (acc, c) => acc + (c.creditos > 0 ? c.creditos : 3),
-    );
+    final totalCreditos = CalculoCursoService.totalCreditos(cursos);
     final promedio = CalculoCursoService.promedioPonderadoCiclo(
       cursos: cursos,
       resultados: resultados,
@@ -346,7 +343,7 @@ class _CursosScreenState extends State<CursosScreen> {
           titulo: 'Promedio ponderado del ciclo',
           subtitulo: cargando
               ? 'Calculando…'
-              : '$totalCreditos créditos matriculados • $conNotas de ${cursos.length} cursos con notas',
+              : '$totalCreditos créditos · $conNotas de ${cursos.length} cursos con notas',
         ),
         const SizedBox(height: 22),
         SeccionTitulo(

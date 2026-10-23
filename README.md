@@ -256,6 +256,13 @@ $$nota_{necesaria} = \frac{meta - \text{puntos obtenidos}}{\text{peso pendiente}
 
 Si es mayor que 20 la meta es inalcanzable; si es 0 o menos, la meta ya está asegurada.
 
+**6. Promedio del ciclo y acumulado (H21).** Cada curso con notas pesa según sus créditos
+(3 por defecto); el acumulado pondera cada ciclo por los créditos que ya tienen notas:
+
+$$promedio_{ciclo} = \frac{\sum nota_{curso} \cdot creditos_{curso}}{\sum creditos_{curso}}
+\qquad
+acumulado = \frac{\sum promedio_{ciclo} \cdot creditos_{evaluados}}{\sum creditos_{evaluados}}$$
+
 ---
 
 ## Escáner de notas
@@ -405,7 +412,9 @@ SI988-2026-GRUPO03/
 | H17 | Interfaz responsiva del simulador | Completada |
 | H18 | Tarjeta interactiva con promedio final y condición aprobado/desaprobado | Completada |
 | H19 | Registro de notas por cámara desde el reporte del portal | Completada |
-| H20 | Pantalla de gráficos de evolución | En revisión |
+| H20 | Pantalla de gráficos de evolución | Completada |
+| H21 | Promedio del ciclo ponderado por créditos | Completada |
+| — | Recordatorios de evaluaciones y notificaciones | En desarrollo |
 
 Mejoras transversales: verificación de correo, rediseño completo según el sistema de diseño
 (Material 3, claro/oscuro), borrado en cascada, reglas de seguridad de Firestore.
@@ -426,7 +435,6 @@ Mejoras transversales: verificación de correo, rediseño completo según el sis
 ## Hoja de ruta
 
 - [ ] Validación automática de cada PR con GitHub Actions (`flutter analyze` y `flutter test`).
-- [ ] Promedio del ciclo ponderado por créditos, como el promedio oficial.
 - [ ] Pantalla de inicio "Tus ciclos" para usuarios con cuenta.
 - [ ] Gestión de cuenta: cambiar contraseña y eliminar la cuenta con todos sus datos.
 - [ ] Recordatorios de evaluaciones con notificaciones locales.
