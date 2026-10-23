@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/curso.dart';
 import '../services/calculo_curso_service.dart';
 import '../services/calculos_multinivel.dart';
+import '../services/calculos_prioridades.dart';
 import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
 import '../theme/estado_nota_colors.dart';
@@ -11,10 +12,12 @@ import '../widgets/app_bar_nivel.dart';
 import '../widgets/card_resultado.dart';
 import '../widgets/dialogos.dart';
 import '../widgets/estado_vacio.dart';
+import '../widgets/prioridades.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_curso.dart';
 import 'escanear_notas_screen.dart';
 import 'evolucion_screen.dart';
+import 'prioridades_screen.dart';
 import 'unidades_screen.dart';
 
 class CursosScreen extends StatefulWidget {
@@ -194,6 +197,20 @@ class _CursosScreenState extends State<CursosScreen> {
     if (mounted) _recalcular();
   }
 
+  /// H23: evaluaciones pendientes que mas mueven el promedio del ciclo.
+  Future<void> _abrirPrioridades() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PrioridadesScreen(
+          vistaInicial: VistaPrioridades.ciclo,
+          cicloId: widget.cicloId,
+          cicloNombre: widget.cicloNombre,
+        ),
+      ),
+    );
+    if (mounted) _recalcular();
+  }
+
   Future<void> _abrirCurso(Curso curso) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -333,6 +350,7 @@ class _CursosScreenState extends State<CursosScreen> {
         resultados.values.where((r) => r.notaActual != null).length;
     final enRiesgo =
         resultados.values.where((r) => (r.notaActual ?? 99) < 10.5).length;
+    final principal = cargando ? null : CalculosPrioridades.delCiclo(cursos, resultados, limite: 1).firstOrNull;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -345,6 +363,10 @@ class _CursosScreenState extends State<CursosScreen> {
               ? 'Calculando…'
               : '$totalCreditos créditos · $conNotas de ${cursos.length} cursos con notas',
         ),
+        if (principal != null) ...[
+          const SizedBox(height: 12),
+          TarjetaPrioridad(principal: principal, enCiclo: true, onTap: _abrirPrioridades),
+        ],
         const SizedBox(height: 22),
         SeccionTitulo(
           'Cursos · ${cursos.length}',
@@ -365,6 +387,7 @@ class _CursosScreenState extends State<CursosScreen> {
             key: ValueKey(curso.id),
             nombre: curso.nombre,
             creditos: curso.creditos,
+            avance: resultados[curso.id]?.avance,
             nota: resultados[curso.id]?.notaActual,
             pctEvaluado:
                 resultados[curso.id]?.porcentajeEvaluado ?? 0,

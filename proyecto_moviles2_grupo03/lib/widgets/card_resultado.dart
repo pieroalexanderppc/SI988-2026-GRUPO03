@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/calculos_multinivel.dart';
 import '../theme/app_theme.dart';
 import '../theme/estado_nota_colors.dart';
 import '../utils/formato_nota.dart';
@@ -186,11 +187,15 @@ class _NumeroNota extends StatelessWidget {
 
 /// Tarjeta de resultado expandida (DESIGN.md seccion 6 y pantalla 07):
 /// titulo + pill de estado, numero grande "/ 20", EscalaNota y un pie.
+///
+/// Con [avance] (curso con notas pendientes) la pill no da el curso por
+/// aprobado: dice "Asegurado", "Vas aprobando", "En riesgo" o "Desaprobado".
 class CardResultadoExpandida extends StatelessWidget {
   final double? nota;
   final String titulo;
   final String pie;
   final double umbral;
+  final AvanceCurso? avance;
 
   const CardResultadoExpandida({
     super.key,
@@ -198,7 +203,17 @@ class CardResultadoExpandida extends StatelessWidget {
     required this.titulo,
     required this.pie,
     this.umbral = 10.5,
+    this.avance,
   });
+
+  /// Texto e icono de la pill.
+  static (String, IconData) _pill(bool aprobado, AvanceCurso? avance) => switch (avance) {
+        AvanceCurso.asegurado => ('Asegurado', Icons.verified_rounded),
+        AvanceCurso.vasAprobando => ('Vas aprobando', Icons.trending_up_rounded),
+        AvanceCurso.enRiesgo => ('En riesgo', Icons.warning_rounded),
+        AvanceCurso.sinOpcion => ('Desaprobado', Icons.cancel_rounded),
+        null => aprobado ? ('Aprobado', Icons.check_circle_rounded) : ('Desaprobado', Icons.cancel_rounded),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +245,7 @@ class CardResultadoExpandida extends StatelessWidget {
       colorNota = esOscuro ? estado.desaprobado : estado.onDesaprobadoFondo;
     }
     final textoPill = esOscuro ? fondo : Colors.white;
+    final (etiquetaPill, iconoPill) = _pill(aprobado ?? false, avance);
 
     Widget tarjeta = AnimatedContainer(
       duration: Duration(milliseconds: sinAnimaciones ? 150 : 300),
@@ -254,11 +270,10 @@ class CardResultadoExpandida extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(aprobado ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                          size: 18, color: textoPill),
+                      Icon(iconoPill, size: 18, color: textoPill),
                       const SizedBox(width: 6),
                       Text(
-                        aprobado ? 'Aprobado' : 'Desaprobado',
+                        etiquetaPill,
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textoPill),
                       ),
                     ],
@@ -304,7 +319,7 @@ class CardResultadoExpandida extends StatelessWidget {
       container: true,
       label: aprobado == null
           ? '$titulo, sin notas. $pie'
-          : '$titulo ${FormatoNota.nota(valor)}, ${aprobado ? 'aprobado' : 'desaprobado'}. $pie',
+          : '$titulo ${FormatoNota.nota(valor)}, ${etiquetaPill.toLowerCase()}. $pie',
       excludeSemantics: true,
       child: tarjeta,
     );

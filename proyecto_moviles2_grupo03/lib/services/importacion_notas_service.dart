@@ -78,12 +78,36 @@ class ImportacionNotasService {
     await batch.commit();
   }
 
+  /// Guarda los criterios escaneados dentro de una unidad que ya existe (desde
+  /// la pantalla de la unidad). Reemplaza sus tipos actuales: [tiposAnteriores]
+  /// es tipoId -> ids de sus notas, que la pantalla ya conoce. Un solo lote,
+  /// para que sin conexion todo se aplique a la vez en el telefono.
+  Future<void> llenarUnidad({
+    required String uid,
+    required String cursoId,
+    required String unidadId,
+    required UnidadDetectada unidad,
+    Map<String, List<String>> tiposAnteriores = const {},
+  }) {
+    final batch = _firestore.batch();
+    final unidadRef = _cursosRef(uid).doc(cursoId).collection('unidades').doc(unidadId);
+    for (final e in tiposAnteriores.entries) {
+      final tipoRef = unidadRef.collection('tiposEvaluacion').doc(e.key);
+      for (final notaId in e.value) {
+        batch.delete(tipoRef.collection('notas').doc(notaId));
+      }
+      batch.delete(tipoRef);
+    }
+    if (unidad.peso != null) batch.update(unidadRef, {'porcentaje': unidad.peso});
+    _agregarTipos(batch, unidadRef, unidad.criterios);
+    return batch.commit();
+  }
+
   void _agregarAlLote(
     WriteBatch batch,
     DocumentReference<Map<String, dynamic>> cursoRef,
     List<UnidadDetectada> unidades,
   ) {
-    final ahora = DateTime.now();
     for (final unidad in unidades) {
       final unidadRef = cursoRef.collection('unidades').doc();
       batch.set(unidadRef, {
@@ -91,24 +115,32 @@ class ImportacionNotasService {
         'cursoId': cursoRef.id,
         'porcentaje': unidad.peso ?? 0,
       });
+      _agregarTipos(batch, unidadRef, unidad.criterios);
+    }
+  }
 
-      for (var i = 0; i < unidad.criterios.length; i++) {
-        final c = unidad.criterios[i];
-        // Ids con el orden del reporte: Firestore ordena por id por defecto.
-        final tipoRef = unidadRef.collection('tiposEvaluacion').doc('${(i + 1).toString().padLeft(2, '0')}_${_idAleatorio()}');
-        batch.set(tipoRef, {
-          'nombre': c.descripcion.trim().isEmpty ? c.nombre : c.descripcion.trim(),
-          'porcentaje': c.peso ?? 0,
+  void _agregarTipos(
+    WriteBatch batch,
+    DocumentReference<Map<String, dynamic>> unidadRef,
+    List<CriterioDetectado> criterios,
+  ) {
+    final ahora = DateTime.now();
+    for (var i = 0; i < criterios.length; i++) {
+      final c = criterios[i];
+      // Ids con el orden del reporte: Firestore ordena por id por defecto.
+      final tipoRef = unidadRef.collection('tiposEvaluacion').doc('${(i + 1).toString().padLeft(2, '0')}_${_idAleatorio()}');
+      batch.set(tipoRef, {
+        'nombre': c.descripcion.trim().isEmpty ? c.nombre : c.descripcion.trim(),
+        'porcentaje': c.peso ?? 0,
+      });
+      if (c.nota != null) {
+        final notaRef = tipoRef.collection('notas').doc();
+        batch.set(notaRef, {
+          'valor': c.nota,
+          'nombre': c.nombre,
+          'fecha': Timestamp.fromDate(ahora),
+          'tipoEvaluacionId': tipoRef.id,
         });
-        if (c.nota != null) {
-          final notaRef = tipoRef.collection('notas').doc();
-          batch.set(notaRef, {
-            'valor': c.nota,
-            'nombre': c.nombre,
-            'fecha': Timestamp.fromDate(ahora),
-            'tipoEvaluacionId': tipoRef.id,
-          });
-        }
       }
     }
   }

@@ -4,6 +4,9 @@ import '../utils/formato_nota.dart';
 /// Resultado de [pedirNombreYPeso].
 typedef NombrePeso = ({String nombre, double peso});
 
+/// Resultado de [pedirComponente]: nota `null` si se dejo vacia.
+typedef DatosComponente = ({String nombre, double peso, double? nota});
+
 /// Resultado de [pedirNombreYCreditos] (H21).
 typedef NombreCreditos = ({String nombre, int creditos});
 
@@ -96,6 +99,39 @@ Future<NombrePeso?> pedirNombreYPeso(
   ).then((r) => r is NombrePeso ? r : null);
 }
 
+/// Pide nombre, peso (%) y nota opcional (0-20) de un tipo de evaluacion.
+/// Cada tipo tiene una sola nota, la que sale en el portal.
+Future<DatosComponente?> pedirComponente(
+  BuildContext context, {
+  required String titulo,
+  String inicialNombre = '',
+  double? inicialPeso,
+  double? inicialNota,
+  double? pesoDisponible,
+  required String textoBoton,
+  bool conNota = true,
+}) {
+  return showDialog<Object>(
+    context: context,
+    builder: (_) => _DialogoNombrePeso(
+      titulo: titulo,
+      etiquetaNombre: 'Nombre',
+      hintNombre: 'Ej. Procedimental, Examen',
+      inicialNombre: inicialNombre,
+      inicialPeso: inicialPeso,
+      inicialNota: inicialNota,
+      pesoDisponible: pesoDisponible,
+      textoBoton: textoBoton,
+      conPeso: true,
+      conNota: conNota,
+    ),
+  ).then((r) => switch (r) {
+        DatosComponente d => d,
+        NombrePeso p => (nombre: p.nombre, peso: p.peso, nota: null),
+        _ => null,
+      });
+}
+
 class _DialogoNombrePeso extends StatefulWidget {
   final String titulo;
   final String etiquetaNombre;
@@ -105,6 +141,8 @@ class _DialogoNombrePeso extends StatefulWidget {
   final double? pesoDisponible;
   final String textoBoton;
   final bool conPeso;
+  final bool conNota;
+  final double? inicialNota;
 
   const _DialogoNombrePeso({
     required this.titulo,
@@ -115,6 +153,8 @@ class _DialogoNombrePeso extends StatefulWidget {
     this.pesoDisponible,
     required this.textoBoton,
     required this.conPeso,
+    this.conNota = false,
+    this.inicialNota,
   });
 
   @override
@@ -127,18 +167,26 @@ class _DialogoNombrePesoState extends State<_DialogoNombrePeso> {
   late final _pesoCtrl = TextEditingController(
     text: widget.inicialPeso == null ? '' : FormatoNota.porcentaje(widget.inicialPeso!),
   );
+  late final _notaCtrl = TextEditingController(
+    text: widget.inicialNota == null ? '' : FormatoNota.porcentaje(widget.inicialNota!),
+  );
 
   @override
   void dispose() {
     _nombreCtrl.dispose();
     _pesoCtrl.dispose();
+    _notaCtrl.dispose();
     super.dispose();
   }
 
   void _aceptar() {
     if (!_formKey.currentState!.validate()) return;
     final nombre = _nombreCtrl.text.trim();
-    if (widget.conPeso) {
+    if (widget.conNota) {
+      Navigator.of(context).pop<Object>(
+        (nombre: nombre, peso: _leerNumero(_pesoCtrl.text)!, nota: _leerNumero(_notaCtrl.text)),
+      );
+    } else if (widget.conPeso) {
       Navigator.of(context).pop<Object>((nombre: nombre, peso: _leerNumero(_pesoCtrl.text)!));
     } else {
       Navigator.of(context).pop<Object>(nombre);
@@ -149,6 +197,7 @@ class _DialogoNombrePesoState extends State<_DialogoNombrePeso> {
   Widget build(BuildContext context) {
     final disponible = widget.pesoDisponible;
     return AlertDialog(
+      scrollable: true,
       title: Text(widget.titulo),
       content: Form(
         key: _formKey,
@@ -170,8 +219,8 @@ class _DialogoNombrePesoState extends State<_DialogoNombrePeso> {
               TextFormField(
                 controller: _pesoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _aceptar(),
+                textInputAction: widget.conNota ? TextInputAction.next : TextInputAction.done,
+                onFieldSubmitted: widget.conNota ? null : (_) => _aceptar(),
                 decoration: InputDecoration(
                   labelText: 'Peso',
                   suffixText: '%',
@@ -184,6 +233,29 @@ class _DialogoNombrePesoState extends State<_DialogoNombrePeso> {
                   final n = _leerNumero(v);
                   if (n == null || !n.isFinite || n <= 0 || n > 100) {
                     return 'Ingresa un valor mayor que 0 y hasta 100';
+                  }
+                  return null;
+                },
+              ),
+            ],
+            if (widget.conNota) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _notaCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _aceptar(),
+                decoration: const InputDecoration(
+                  labelText: 'Nota',
+                  hintText: '0–20',
+                  prefixIcon: Icon(Icons.grade_rounded),
+                  helperText: 'Opcional. Déjala vacía si aún no la tienes.',
+                ),
+                validator: (v) {
+                  if ((v ?? '').trim().isEmpty) return null;
+                  final n = _leerNumero(v);
+                  if (n == null || !n.isFinite || n < 0 || n > 20) {
+                    return 'La nota debe estar entre 0 y 20';
                   }
                   return null;
                 },
@@ -319,6 +391,7 @@ class _DialogoNombreCreditosState extends State<_DialogoNombreCreditos> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: Text(widget.titulo),
       content: Form(
         key: _formKey,
