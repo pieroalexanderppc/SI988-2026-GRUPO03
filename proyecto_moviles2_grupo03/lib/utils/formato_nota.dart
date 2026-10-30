@@ -10,4 +10,7 @@ class FormatoNota {
         ? redondeado.toStringAsFixed(0)
         : redondeado.toStringAsFixed(1);
   }
+
+  /// Puntos que suma cada punto de nota, con 2 decimales (0.24).
+  static String puntos(double valor) => valor.toStringAsFixed(2);
 }

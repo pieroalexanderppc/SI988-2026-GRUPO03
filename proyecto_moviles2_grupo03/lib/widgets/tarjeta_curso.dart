@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/calculos_multinivel.dart';
 import '../theme/app_theme.dart';
 import '../theme/estado_nota_colors.dart';
 import '../utils/formato_nota.dart';
@@ -15,6 +16,9 @@ class TarjetaCurso extends StatelessWidget {
   /// Porcentaje del curso evaluado (0-100).
   final double pctEvaluado;
   final bool cargando;
+
+  /// Como va el curso si aun faltan notas (no se da por aprobado).
+  final AvanceCurso? avance;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -26,6 +30,7 @@ class TarjetaCurso extends StatelessWidget {
     required this.pctEvaluado,
     required this.onTap,
     this.cargando = false,
+    this.avance,
     this.onLongPress,
   });
 
@@ -133,7 +138,7 @@ class TarjetaCurso extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    ChipEstado(nota: valor),
+                    ChipEstado(nota: valor, avance: avance),
                   ],
                 ),
             ],
@@ -149,7 +154,7 @@ class TarjetaCurso extends StatelessWidget {
     return Semantics(
       button: true,
       label: '$nombre, ${valor == null ? 'sin notas' : 'nota ${FormatoNota.nota(valor)}, '
-          '${enRiesgo ? 'desaprobado' : 'aprobado'}, $evaluado por ciento evaluado'}',
+          '${ChipEstado.textoDe(valor, avance: avance).toLowerCase()}, $evaluado por ciento evaluado'}',
       excludeSemantics: true,
       child: tarjeta,
     );

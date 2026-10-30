@@ -62,6 +62,49 @@ class EvaluacionesService {
     await ref.set(tipo.toMap());
   }
 
+  /// Crea o actualiza un tipo junto con su única nota en un solo lote, para que
+  /// sin conexión ambos cambios se apliquen a la vez en el teléfono.
+  ///
+  /// - [tipo] `null` crea un tipo nuevo.
+  /// - [notaActual] es la nota que ya tenía; [nota] `null` la borra.
+  /// - Con [conNota] en false solo se cambian nombre y peso.
+  Future<void> guardarComponente(
+    String uid,
+    String cursoId,
+    String unidadId, {
+    TipoEvaluacion? tipo,
+    required String nombre,
+    required double porcentaje,
+    Nota? notaActual,
+    double? nota,
+    bool conNota = true,
+  }) {
+    final batch = _firestore.batch();
+    final tipoRef = tipo == null ? _tiposRef(uid, cursoId, unidadId).doc() : _tiposRef(uid, cursoId, unidadId).doc(tipo.id);
+    final datosTipo = {'nombre': nombre.trim(), 'porcentaje': porcentaje};
+    if (tipo == null) {
+      batch.set(tipoRef, datosTipo);
+    } else {
+      batch.update(tipoRef, datosTipo);
+    }
+
+    if (conNota) {
+      final notas = tipoRef.collection('notas');
+      if (nota == null) {
+        if (notaActual != null) batch.delete(notas.doc(notaActual.id));
+      } else if (notaActual == null) {
+        final ref = notas.doc();
+        batch.set(
+          ref,
+          Nota(id: ref.id, valor: nota, fecha: DateTime.now(), tipoEvaluacionId: tipoRef.id).toMap(),
+        );
+      } else if (nota != notaActual.valor) {
+        batch.update(notas.doc(notaActual.id), {'valor': nota});
+      }
+    }
+    return batch.commit();
+  }
+
   Future<void> actualizarTipoEvaluacion(
     String uid,
     String cursoId,

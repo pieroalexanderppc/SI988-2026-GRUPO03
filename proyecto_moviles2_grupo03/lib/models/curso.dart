@@ -11,6 +11,9 @@ class Curso {
     this.creditos = 3,
   });
 
+  /// Créditos usados en los promedios: 3 si el valor guardado no es válido (H21).
+  int get creditosEfectivos => creditos > 0 ? creditos : 3;
+
   Map<String, dynamic> toMap() {
     return {
       'nombre': nombre,
