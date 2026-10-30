@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import 'package:printing/printing.dart';
 
 import '../models/curso.dart';
 import '../services/calculo_curso_service.dart';
@@ -7,6 +11,7 @@ import '../services/calculos_multinivel.dart';
 import '../services/calculos_prioridades.dart';
 import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
+import '../services/reporte_ciclo_pdf.dart';
 import '../theme/estado_nota_colors.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/card_resultado.dart';
@@ -19,6 +24,7 @@ import 'escanear_notas_screen.dart';
 import 'evolucion_screen.dart';
 import 'prioridades_screen.dart';
 import 'unidades_screen.dart';
+import 'vista_previa_pdf_screen.dart';
 
 class CursosScreen extends StatefulWidget {
   final String cicloId;
@@ -44,6 +50,11 @@ class _CursosScreenState extends State<CursosScreen> {
 
   String _claveCalculos = '';
   Future<Map<String, ResultadoCalculoCurso>>? _calculos;
+
+  List<Curso> _ultimosCursos = const [];
+  Map<String, ResultadoCalculoCurso> _ultimosResultados = const {};
+  double? _ultimoPromedio;
+  int _ultimosCreditos = 0;
 
   @override
   void initState() {
@@ -224,6 +235,107 @@ class _CursosScreenState extends State<CursosScreen> {
     if (mounted) _recalcular();
   }
 
+  Future<void> _exportarPdf({
+    required List<Curso> cursos,
+    required Map<String, ResultadoCalculoCurso> resultados,
+    required double? promedioCiclo,
+    required int totalCreditos,
+  }) async {
+    if (cursos.isEmpty) {
+      _mostrarMensaje('No hay cursos para exportar en este ciclo.');
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    final nombreEstudiante = user?.displayName ??
+        (user?.isAnonymous == true ? 'Estudiante Invitado' : 'Estudiante');
+    final correoEstudiante = user?.email;
+
+    final nombreLimpio =
+        widget.cicloNombre.replaceAll(RegExp(r'[^\w\-]'), '_');
+    final nombreArchivo = 'Reporte_Pondera_$nombreLimpio.pdf';
+
+    Future<Uint8List> construirPdf() => ReporteCicloPdf.generarPdf(
+          cicloNombre: widget.cicloNombre,
+          cursos: cursos,
+          resultados: resultados,
+          promedioCiclo: promedioCiclo,
+          totalCreditos: totalCreditos,
+          nombreEstudiante: nombreEstudiante,
+          correoEstudiante: correoEstudiante,
+        );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (bottomContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  'Reporte del ciclo (${widget.cicloNombre})',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.visibility_rounded,
+                    color: Color(0xFF3B36C4)),
+                title: const Text('Ver e imprimir reporte'),
+                subtitle:
+                    const Text('Visualiza el PDF con zoom e impresión directa'),
+                onTap: () {
+                  Navigator.of(bottomContext).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => VistaPreviaPdfScreen(
+                        titulo: 'Reporte - ${widget.cicloNombre}',
+                        nombreArchivo: nombreArchivo,
+                        generadorPdf: construirPdf,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share_rounded,
+                    color: Color(0xFF157A45)),
+                title: const Text('Compartir archivo PDF'),
+                subtitle:
+                    const Text('Enviar por WhatsApp, correo o guardar'),
+                onTap: () async {
+                  Navigator.of(bottomContext).pop();
+                  try {
+                    _mostrarMensaje('Generando reporte PDF…');
+                    final pdfBytes = await construirPdf();
+                    await Printing.sharePdf(
+                      bytes: pdfBytes,
+                      filename: nombreArchivo,
+                    );
+                  } catch (_) {
+                    if (mounted) {
+                      _mostrarMensaje('No se pudo compartir el PDF.');
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stream = _cursosStream;
@@ -256,6 +368,17 @@ class _CursosScreenState extends State<CursosScreen> {
               context,
               titulo: widget.cicloNombre,
               opciones: [
+                if (_ultimosCursos.isNotEmpty)
+                  OpcionMenu(
+                    icono: Icons.picture_as_pdf_rounded,
+                    texto: 'Exportar reporte (PDF)',
+                    onTap: () => _exportarPdf(
+                      cursos: _ultimosCursos,
+                      resultados: _ultimosResultados,
+                      promedioCiclo: _ultimoPromedio,
+                      totalCreditos: _ultimosCreditos,
+                    ),
+                  ),
                 OpcionMenu(
                   icono: Icons.delete_outline_rounded,
                   texto: 'Eliminar ciclo',
@@ -352,6 +475,11 @@ class _CursosScreenState extends State<CursosScreen> {
         resultados.values.where((r) => (r.notaActual ?? 99) < 10.5).length;
     final principal = cargando ? null : CalculosPrioridades.delCiclo(cursos, resultados, limite: 1).firstOrNull;
 
+    _ultimosCursos = cursos;
+    _ultimosResultados = resultados;
+    _ultimoPromedio = promedio;
+    _ultimosCreditos = totalCreditos;
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 104),
@@ -367,6 +495,20 @@ class _CursosScreenState extends State<CursosScreen> {
           const SizedBox(height: 12),
           TarjetaPrioridad(principal: principal, enCiclo: true, onTap: _abrirPrioridades),
         ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _exportarPdf(
+              cursos: cursos,
+              resultados: resultados,
+              promedioCiclo: promedio,
+              totalCreditos: totalCreditos,
+            ),
+            icon: const Icon(Icons.picture_as_pdf_rounded),
+            label: const Text('Exportar reporte del ciclo (PDF)'),
+          ),
+        ),
         const SizedBox(height: 22),
         SeccionTitulo(
           'Cursos · ${cursos.length}',
