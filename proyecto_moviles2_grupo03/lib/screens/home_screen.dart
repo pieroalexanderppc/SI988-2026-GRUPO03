@@ -13,6 +13,7 @@ import '../services/calculadora_promedio.dart';
 import 'welcome_screen.dart';
 import 'auth_screen.dart';
 import 'ciclos_screen.dart';
+import 'recordatorios_screen.dart';
 
 /// Pantalla principal: calculadora rapida de promedio ponderado
 /// (DESIGN.md pantalla 10). Sirve tanto con cuenta como sin cuenta.
@@ -73,6 +74,17 @@ class HomeScreen extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const CiclosScreen()),
+                    );
+                  },
+                ),
+                // H26 - Acceso a recordatorios de evaluaciones
+                IconButton(
+                  icon: const Icon(Icons.event_note_rounded),
+                  tooltip: 'Recordatorios',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const RecordatoriosScreen()),
                     );
                   },
                 ),
