@@ -18,6 +18,7 @@ import '../widgets/tarjeta_curso.dart';
 import 'escanear_notas_screen.dart';
 import 'evolucion_screen.dart';
 import 'prioridades_screen.dart';
+import 'recordatorios_screen.dart';
 import 'unidades_screen.dart';
 
 class CursosScreen extends StatefulWidget {
@@ -239,6 +240,19 @@ class _CursosScreenState extends State<CursosScreen> {
         padre: 'Ciclo',
         titulo: widget.cicloNombre,
         acciones: [
+          IconButton(
+            icon: const Icon(Icons.event_note_rounded),
+            tooltip: 'Recordatorios de evaluaciones',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => RecordatoriosScreen(
+                    cursoNombre: widget.cicloNombre,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.bar_chart_rounded),
             tooltip: 'Comparar cursos',
