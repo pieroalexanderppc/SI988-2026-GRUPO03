@@ -17,7 +17,7 @@ ciclo y carrera, simula qué nota se necesita para aprobar y lee las notas del p
 [![ML Kit](https://img.shields.io/badge/ML%20Kit-Text%20Recognition-4285F4?logo=google&logoColor=white)](https://developers.google.com/ml-kit/vision/text-recognition/v2)
 [![Material 3](https://img.shields.io/badge/Material-3-757575?logo=materialdesign&logoColor=white)](https://m3.material.io)
 [![Plataforma](https://img.shields.io/badge/Plataforma-Android-3DDC84?logo=android&logoColor=white)](#requisitos)
-[![Tests](https://img.shields.io/badge/tests-73%20pasando-157A45)](proyecto_moviles2_grupo03/test)
+[![Tests](https://img.shields.io/badge/tests-107%20pasando-157A45)](proyecto_moviles2_grupo03/test)
 
 <br>
 
@@ -356,7 +356,7 @@ Guía técnica completa (estructura del código, configuración de Android, solu
 ```bash
 cd proyecto_moviles2_grupo03
 flutter analyze   # 0 issues
-flutter test      # 73 pruebas
+flutter test      # 107 pruebas
 ```
 
 Las pruebas cubren la lógica de cálculo (promedios, multinivel, simuladores), la preparación de los
@@ -415,8 +415,10 @@ SI988-2026-GRUPO03/
 | H19 | Registro de notas por cámara desde el reporte del portal | Completada |
 | H20 | Pantalla de gráficos de evolución | Completada |
 | H21 | Promedio del ciclo ponderado por créditos | Completada |
-| H23 | Prioridades: qué evaluaciones pesan más en la nota | En revisión |
-| — | Recordatorios de evaluaciones y notificaciones | En desarrollo |
+| H23 | Prioridades: qué evaluaciones pesan más en la nota | Completada |
+| H26 | Recordatorios de evaluaciones y fechas de exámenes | Completada |
+| H27 | Dashboard académico en pantalla de inicio con semáforo | Completada |
+| H28 | Selector dinámico de tema (claro/oscuro) y perfil de usuario | Completada |
 
 Mejoras transversales: verificación de correo, rediseño completo según el sistema de diseño
 (Material 3, claro/oscuro), borrado en cascada, reglas de seguridad de Firestore.
@@ -437,9 +439,9 @@ Mejoras transversales: verificación de correo, rediseño completo según el sis
 ## Hoja de ruta
 
 - [ ] Validación automática de cada PR con GitHub Actions (`flutter analyze` y `flutter test`).
-- [ ] Pantalla de inicio "Tus ciclos" para usuarios con cuenta.
-- [ ] Gestión de cuenta: cambiar contraseña y eliminar la cuenta con todos sus datos.
-- [ ] Recordatorios de evaluaciones con notificaciones locales.
+- [x] Pantalla de inicio "Mi Resumen" / Dashboard para usuarios con cuenta (H27).
+- [x] Gestión de cuenta: perfil y selector dinámico de tema claro/oscuro (H28).
+- [x] Recordatorios de evaluaciones y fechas límites (H26).
 - [ ] Exportar el resumen del ciclo en PDF o imagen.
 - [ ] Escanear todos los cursos de un ciclo en una sola captura.
 - [ ] Diseño de dos paneles para tablet y web.

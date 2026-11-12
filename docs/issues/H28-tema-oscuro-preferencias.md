@@ -36,8 +36,8 @@ Asimismo, el usuario carece de una pantalla dedicada para consultar el estado de
 ---
 
 ## Tareas Técnicas
-- [ ] Crear `ThemeProvider` en `lib/providers/theme_provider.dart` que gestione el estado de `ThemeMode` reactivamente con `ChangeNotifier`.
-- [ ] Envolver `MaterialApp` en `main.dart` con `MultiProvider` para proveer `ThemeProvider` a todo el árbol de widgets.
-- [ ] Crear la pantalla `PerfilAjustesScreen` con `SegmentedButton` o lista de selección para cambiar el tema en tiempo real.
-- [ ] Agregar el botón de acceso directo con avatar o ícono de ajustes en el `AppBarNivel` del `HomeScreen`.
-- [ ] Validar que todos los widgets y diálogos mantengan legibilidad óptima tanto en modo claro como en modo oscuro.
+- [x] Crear `ThemeProvider` en `lib/providers/theme_provider.dart` que gestione el estado de `ThemeMode` reactivamente con `ChangeNotifier`.
+- [x] Envolver `MaterialApp` en `main.dart` con `MultiProvider` para proveer `ThemeProvider` a todo el árbol de widgets.
+- [x] Crear la pantalla `PerfilAjustesScreen` con `SegmentedButton` o lista de selección para cambiar el tema en tiempo real.
+- [x] Agregar el botón de acceso directo con avatar o ícono de ajustes en el `AppBarNivel` del `HomeScreen`.
+- [x] Validar que todos los widgets y diálogos mantengan legibilidad óptima tanto en modo claro como en modo oscuro.

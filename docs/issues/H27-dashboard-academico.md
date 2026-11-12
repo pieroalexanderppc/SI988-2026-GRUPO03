@@ -46,8 +46,8 @@ Esta historia implementa la vista de Dashboard recomendada en la Hoja de Ruta de
 ---
 
 ## Tareas Técnicas
-- [ ] Crear el widget `DashboardCicloWidget` que consulta en tiempo real los ciclos y cursos del usuario en Firestore.
-- [ ] Implementar el cálculo de estado de semáforo por curso utilizando la paleta oficial (`EstadoNotaColors`).
-- [ ] Conectar el Stream de `RecordatoriosService` para extraer los recordatorios próximos más urgentes.
-- [ ] Adaptar `HomeScreen` con navegación segmentada (`SegmentedButton` de Material 3) para alternar entre el Dashboard y la Calculadora rápida.
-- [ ] Mantener intacta la calculadora rápida y el modo sin cuenta para usuarios invitados.
+- [x] Crear el widget `DashboardAcademicoWidget` que consulta en tiempo real los ciclos y cursos del usuario en Firestore.
+- [x] Implementar el cálculo de estado de semáforo por curso utilizando la paleta oficial (`EstadoNotaColors`).
+- [x] Conectar el Stream de `RecordatoriosService` para extraer los recordatorios próximos más urgentes.
+- [x] Adaptar `HomeScreen` con navegación segmentada (`SegmentedButton` de Material 3) para alternar entre el Dashboard y la Calculadora rápida.
+- [x] Mantener intacta la calculadora rápida y el modo sin cuenta para usuarios invitados.
