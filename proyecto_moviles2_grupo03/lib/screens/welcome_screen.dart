@@ -4,6 +4,8 @@ import '../theme/app_theme.dart';
 import '../widgets/pondera_logo.dart';
 import 'auth_screen.dart';
 import 'home_screen.dart';
+import '../services/auth_service.dart';
+import '../widgets/boton_google.dart';
 
 /// Pantalla 01 - Splash / Bienvenida (DESIGN.md seccion 7).
 class WelcomeScreen extends StatefulWidget {
@@ -15,6 +17,7 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _isVisible = false;
+  bool _cargandoGoogle = false;
 
   @override
   void initState() {
@@ -33,6 +36,55 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
+      ),
+    );
+  }
+
+  Future<void> _iniciarConGoogle() async {
+    setState(() => _cargandoGoogle = true);
+    try {
+      final cred = await AuthService().iniciarSesionConGoogle();
+      if (!mounted) return;
+      if (cred != null) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } on CorreoNoAutorizadoException catch (e) {
+      if (!mounted) return;
+      _mostrarDialogoDominioNoAutorizado(context, e.email);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al conectar con Google: ${e.toString()}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _cargandoGoogle = false);
+      }
+    }
+  }
+
+  void _mostrarDialogoDominioNoAutorizado(BuildContext context, String email) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.school_rounded, color: Colors.orange, size: 40),
+        title: const Text('Acceso institucional requerido'),
+        content: Text(
+          'La cuenta seleccionada ($email) no pertenece a la Universidad Privada de Tacna ni a la lista de pruebas autorizadas.\n\n'
+          'Debes seleccionar tu correo institucional (@virtual.upt.pe) para poder ingresar a Pondera.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
       ),
     );
   }
@@ -95,14 +147,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             _ReglaNota(color: frente),
                             const SizedBox(height: 40),
                             const Spacer(),
+                            BotonGoogle(
+                              onPressed: _iniciarConGoogle,
+                              cargando: _cargandoGoogle,
+                              texto: 'Continuar con Google institucional',
+                            ),
+                            const SizedBox(height: 12),
                             FilledButton.icon(
                               style: FilledButton.styleFrom(
                                 backgroundColor: frente,
                                 foregroundColor: fondo,
                               ),
                               onPressed: () => _irA(const AuthScreen()),
-                              icon: const Icon(Icons.login_rounded),
-                              label: const Text('Iniciar sesión o registrarme'),
+                              icon: const Icon(Icons.mail_outline_rounded),
+                              label: const Text('Entrar con correo y clave'),
                             ),
                             const SizedBox(height: 12),
                             OutlinedButton.icon(

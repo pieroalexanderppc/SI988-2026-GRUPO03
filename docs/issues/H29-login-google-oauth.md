@@ -31,19 +31,19 @@ La integración de Google Sign-In mediante OAuth 2.0 y OpenID Connect delega la 
 - **Cuando** el usuario presiona "Atrás" o cancela la selección,
 - **Entonces** la aplicación no se bloquea ni genera excepciones no controladas, retornando limpiamente a la pantalla de login con un mensaje informativo o permaneciendo en el estado previo.
 
-### Escenario 4: Validación de dominio institucional (Opcional)
+### Escenario 4: Validación de dominio institucional universitario y cuenta de prueba
 - **Dado** que se configura la restricción de dominio universitario,
-- **Cuando** un usuario intenta acceder con un correo que no pertenece al dominio permitido (ej. distinto de `@upt.pe`),
-- **Entonces** la aplicación revoca la sesión temporal en Firebase, muestra un diálogo de advertencia informando que debe utilizar su correo universitario y no almacena datos no autorizados.
+- **Cuando** un usuario intenta acceder con un correo que no pertenece al dominio permitido (`@virtual.upt.pe` o `@upt.pe`) y no es la cuenta de prueba autorizada (`elvismv.2016@gmail.com`),
+- **Entonces** la aplicación revoca la sesión temporal en Firebase, muestra un diálogo de advertencia informando que debe utilizar su correo institucional `@virtual.upt.pe` y no almacena datos no autorizados.
 
 ---
 
 ## Tareas Técnicas
-- [ ] Habilitar el proveedor de inicio de sesión **Google** en Firebase Authentication (Firebase Console).
-- [ ] Obtener la huella digital SHA-1 del keystore de desarrollo (`debug.keystore`) y registrarla en el proyecto de Firebase.
-- [ ] Descargar y actualizar el archivo `google-services.json` en `proyecto_moviles2_grupo03/android/app/`.
-- [ ] Agregar la dependencia `google_sign_in` en `proyecto_moviles2_grupo03/pubspec.yaml`.
-- [ ] Implementar el método `iniciarSesionConGoogle()` en `AuthService` gestionando `GoogleSignInAuthentication` y `GoogleAuthProvider.credential`.
-- [ ] Incorporar el botón oficial de "Continuar con Google" en `WelcomeScreen` y `AuthScreen` respetando la guía de diseño de Google y Material 3.
-- [ ] Actualizar `PerfilAjustesScreen` para mostrar la foto de perfil proveniente de `user.photoURL` si está disponible.
-- [ ] Desarrollar pruebas unitarias y de integración para el servicio de autenticación con Google.
+- [x] Configuración de dependencias: Agregar `google_sign_in: ^6.2.1` en `proyecto_moviles2_grupo03/pubspec.yaml`.
+- [x] Implementación de `AuthService`: Servicio de autenticación OAuth 2.0 (`iniciarSesionConGoogle()`, `cerrarSesion()`) y validación estricta de dominios (`@virtual.upt.pe`, `@upt.pe`) y whitelist admin (`elvismv.2016@gmail.com`).
+- [x] Componente UI `BotonGoogle`: Botón con especificaciones oficiales de Google y vector exacto multi-color, adaptable a modo claro/oscuro.
+- [x] Integración en `WelcomeScreen` y `AuthScreen`: Botón Google, separador visual y diálogo de error explicativo para correos no institucionales.
+- [x] Actualización de `PerfilAjustesScreen`: Carga de avatar desde `photoURL`, badge de "Google Institucional UPT" / "Google Admin (Testing)" y cierre de sesión sincronizado.
+- [x] Pruebas Unitarias Automatizadas: Suite de 8 tests en `test/auth_service_test.dart` validando dominios permitidos, correos admin, sanitización y rechazo de dominios impostores.
+- [ ] *(Paso manual en consola)* Habilitar el proveedor **Google** en Firebase Console y registrar la huella SHA-1 del keystore si se requiere ejecución en dispositivo físico.
+

@@ -4,6 +4,8 @@ import '../theme/estado_nota_colors.dart';
 import '../utils/validators.dart';
 import 'home_screen.dart';
 import 'verificar_correo_screen.dart';
+import '../services/auth_service.dart';
+import '../widgets/boton_google.dart';
 
 /// Pantalla 02 - Login / Registro (DESIGN.md seccion 7).
 ///
@@ -25,6 +27,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _esRegistro = false;
   bool _cargando = false;
+  bool _cargandoGoogle = false;
   bool _verPassword = false;
   bool _intentoEnviar = false;
 
@@ -168,6 +171,62 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() => _cargando = false);
       }
     }
+  }
+
+  Future<void> _iniciarConGoogle() async {
+    setState(() {
+      _cargandoGoogle = true;
+      _errorTitulo = null;
+      _errorDetalle = null;
+      _info = null;
+    });
+
+    try {
+      final cred = await AuthService().iniciarSesionConGoogle();
+      if (!mounted) return;
+      if (cred != null) {
+        if (widget.modoVincular) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
+      }
+    } on CorreoNoAutorizadoException catch (e) {
+      if (!mounted) return;
+      _mostrarDialogoDominioNoAutorizado(context, e.email);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorTitulo = 'Error con Google';
+        _errorDetalle = 'No se pudo completar el inicio de sesión. Inténtalo de nuevo.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _cargandoGoogle = false);
+      }
+    }
+  }
+
+  void _mostrarDialogoDominioNoAutorizado(BuildContext context, String email) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.school_rounded, color: Colors.orange, size: 40),
+        title: const Text('Acceso institucional requerido'),
+        content: Text(
+          'La cuenta ($email) no pertenece a la Universidad Privada de Tacna ni a las cuentas de prueba autorizadas.\n\n'
+          'Debes seleccionar tu correo institucional (@virtual.upt.pe) para poder ingresar a Pondera.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _recuperarPassword() async {
@@ -393,7 +452,30 @@ class _AuthScreenState extends State<AuthScreen> {
                                   )
                                 : Text(_esRegistro ? 'Crear cuenta' : 'Iniciar sesión'),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: scheme.outlineVariant)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'o continúa con',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: scheme.outlineVariant)),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          BotonGoogle(
+                            onPressed: _iniciarConGoogle,
+                            cargando: _cargandoGoogle,
+                            texto: 'Google institucional',
+                          ),
+                          const SizedBox(height: 12),
                           TextButton(
                             onPressed: _cargando ? null : _continuarSinCuenta,
                             child: const Text('Continuar sin cuenta'),

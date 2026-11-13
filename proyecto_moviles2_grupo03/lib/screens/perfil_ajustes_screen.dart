@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/theme_provider.dart';
+import '../services/auth_service.dart';
 import '../widgets/app_bar_nivel.dart';
 import 'welcome_screen.dart';
 
@@ -35,7 +36,7 @@ class PerfilAjustesScreen extends StatelessWidget {
     );
 
     if (confirmar == true && context.mounted) {
-      await FirebaseAuth.instance.signOut();
+      await AuthService().cerrarSesion();
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const WelcomeScreen()),
@@ -51,7 +52,13 @@ class PerfilAjustesScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     final email = user?.email ?? 'usuario@upt.pe';
     final inicial = email.isNotEmpty ? email[0].toUpperCase() : 'U';
-    final nombreUsuario = email.split('@').first;
+    final nombreMostrar = (user?.displayName != null && user!.displayName!.trim().isNotEmpty)
+        ? user.displayName!.trim()
+        : email.split('@').first;
+    final photoURL = user?.photoURL;
+    final tieneFoto = photoURL != null && photoURL.trim().isNotEmpty;
+    final esGoogle = user?.providerData.any((p) => p.providerId == 'google.com') ?? false;
+    final esAdmin = email.trim().toLowerCase() == 'elvismv.2016@gmail.com';
 
     final themeProvider = context.watch<ThemeProvider>();
     final modoActual = themeProvider.themeMode;
@@ -79,13 +86,16 @@ class PerfilAjustesScreen extends StatelessWidget {
                   CircleAvatar(
                     radius: 32,
                     backgroundColor: theme.colorScheme.primary,
-                    child: Text(
-                      inicial,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        color: theme.colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    backgroundImage: tieneFoto ? NetworkImage(photoURL) : null,
+                    child: tieneFoto
+                        ? null
+                        : Text(
+                            inicial,
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              color: theme.colorScheme.onPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -93,7 +103,7 @@ class PerfilAjustesScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          nombreUsuario,
+                          nombreMostrar,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -113,15 +123,17 @@ class PerfilAjustesScreen extends StatelessWidget {
                         Row(
                           children: [
                             Icon(
-                              Icons.verified_rounded,
-                              size: 16,
-                              color: theme.colorScheme.primary,
+                              esGoogle ? Icons.g_mobiledata_rounded : Icons.verified_rounded,
+                              size: 18,
+                              color: esAdmin ? Colors.orange : theme.colorScheme.primary,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Cuenta Verificada',
+                              esGoogle
+                                  ? (esAdmin ? 'Google Admin (Testing)' : 'Google Institucional UPT')
+                                  : 'Cuenta Verificada',
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.primary,
+                                color: esAdmin ? Colors.orange : theme.colorScheme.primary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
