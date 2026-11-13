@@ -14,6 +14,8 @@ class RecordatorioEvaluacion {
   final DateTime fecha;
   final String descripcion;
   final bool completado;
+  final bool notificar;
+  final int antelacionHoras;
   final DateTime creadoEn;
 
   RecordatorioEvaluacion({
@@ -26,8 +28,16 @@ class RecordatorioEvaluacion {
     required this.fecha,
     this.descripcion = '',
     this.completado = false,
+    this.notificar = true,
+    this.antelacionHoras = 24,
     DateTime? creadoEn,
   }) : creadoEn = creadoEn ?? DateTime.now();
+
+  /// Identificador entero único determinista para el canal nativo de notificaciones.
+  int get notificacionId => (id.hashCode & 0x7FFFFFFF);
+
+  /// Identificador entero determinista para la alerta anticipada corta (1h antes).
+  int get notificacionIdCorta => ('${id}_1h'.hashCode & 0x7FFFFFFF);
 
   /// Comprueba si la fecha del recordatorio ya pasó en comparación con el momento actual.
   bool get estaVencido {
@@ -114,6 +124,8 @@ class RecordatorioEvaluacion {
       'fecha': Timestamp.fromDate(fecha),
       'descripcion': descripcion,
       'completado': completado,
+      'notificar': notificar,
+      'antelacionHoras': antelacionHoras,
       'creadoEn': Timestamp.fromDate(creadoEn),
     };
   }
@@ -137,6 +149,8 @@ class RecordatorioEvaluacion {
       fecha: parseFecha(map['fecha']),
       descripcion: map['descripcion'] as String? ?? '',
       completado: map['completado'] as bool? ?? false,
+      notificar: map['notificar'] as bool? ?? true,
+      antelacionHoras: (map['antelacionHoras'] as num?)?.toInt() ?? 24,
       creadoEn: parseFecha(map['creadoEn']),
     );
   }
@@ -151,6 +165,8 @@ class RecordatorioEvaluacion {
     DateTime? fecha,
     String? descripcion,
     bool? completado,
+    bool? notificar,
+    int? antelacionHoras,
     DateTime? creadoEn,
   }) {
     return RecordatorioEvaluacion(
@@ -163,6 +179,8 @@ class RecordatorioEvaluacion {
       fecha: fecha ?? this.fecha,
       descripcion: descripcion ?? this.descripcion,
       completado: completado ?? this.completado,
+      notificar: notificar ?? this.notificar,
+      antelacionHoras: antelacionHoras ?? this.antelacionHoras,
       creadoEn: creadoEn ?? this.creadoEn,
     );
   }

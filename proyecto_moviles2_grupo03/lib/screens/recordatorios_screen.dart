@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/curso.dart';
 import '../models/recordatorio_evaluacion.dart';
 import '../services/cursos_service.dart';
+import '../services/notificaciones_service.dart';
 import '../services/recordatorios_service.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/dialogos.dart';
@@ -44,6 +45,13 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen> {
       _uid = '';
     }
     _cargarDatos();
+    _solicitarPermisosNotificaciones();
+  }
+
+  void _solicitarPermisosNotificaciones() {
+    try {
+      NotificacionesService().solicitarPermisos();
+    } catch (_) {}
   }
 
   void _cargarDatos() {
@@ -99,6 +107,9 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen> {
       hour: fechaSeleccionada.hour,
       minute: fechaSeleccionada.minute,
     );
+
+    bool notificar = existente?.notificar ?? true;
+    int antelacionHoras = existente?.antelacionHoras ?? 24;
 
     final resultado = await showDialog<bool>(
       context: context,
@@ -269,6 +280,57 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen> {
                         prefixIcon: Icon(Icons.notes_rounded),
                       ),
                     ),
+                    const SizedBox(height: 16),
+
+                    // Configuración de Notificaciones (H30)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Notificación / Alarma'),
+                      subtitle: Text(
+                        notificar
+                            ? 'Alarma $antelacionHoras horas antes de la evaluación'
+                            : 'Sin notificaciones locales',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: notificar,
+                      onChanged: (val) {
+                        setDialogState(() => notificar = val);
+                      },
+                      secondary: Icon(
+                        notificar
+                            ? Icons.notifications_active_rounded
+                            : Icons.notifications_off_outlined,
+                        color: notificar ? scheme.primary : scheme.outline,
+                      ),
+                    ),
+                    if (notificar) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        initialValue: antelacionHoras,
+                        decoration: const InputDecoration(
+                          labelText: 'Antelación de la notificación',
+                          prefixIcon: Icon(Icons.timer_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 1, child: Text('1 hora antes')),
+                          DropdownMenuItem(
+                              value: 2, child: Text('2 horas antes')),
+                          DropdownMenuItem(
+                              value: 12, child: Text('12 horas antes')),
+                          DropdownMenuItem(
+                              value: 24,
+                              child: Text('24 horas antes (Recomendado)')),
+                          DropdownMenuItem(
+                              value: 48, child: Text('2 días antes')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => antelacionHoras = val);
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -309,6 +371,8 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen> {
             cursoNombre: nombreFinal,
             fecha: fechaSeleccionada,
             descripcion: descCtrl.text.trim(),
+            notificar: notificar,
+            antelacionHoras: antelacionHoras,
           );
           if (mounted) _mostrarMensaje('Recordatorio actualizado.');
         } else {
@@ -319,6 +383,8 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen> {
             cursoNombre: nombreFinal,
             fecha: fechaSeleccionada,
             descripcion: descCtrl.text.trim(),
+            notificar: notificar,
+            antelacionHoras: antelacionHoras,
           );
           if (mounted) _mostrarMensaje('Recordatorio creado.');
         }
@@ -655,6 +721,22 @@ class _TarjetaRecordatorio extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  if (r.notificar && !r.completado) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.notifications_active_outlined,
+                      size: 14,
+                      color: scheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${r.antelacionHoras}h antes',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
               ),
 
