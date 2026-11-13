@@ -419,6 +419,7 @@ SI988-2026-GRUPO03/
 | H26 | Recordatorios de evaluaciones y fechas de exámenes | Completada |
 | H27 | Dashboard académico en pantalla de inicio con semáforo | Completada |
 | H28 | Selector dinámico de tema (claro/oscuro) y perfil de usuario | Completada |
+| H29 | Inicio de sesión seguro con Google Sign-In (OAuth 2.0) | En backlog |
 
 Mejoras transversales: verificación de correo, rediseño completo según el sistema de diseño
 (Material 3, claro/oscuro), borrado en cascada, reglas de seguridad de Firestore.
@@ -442,6 +443,7 @@ Mejoras transversales: verificación de correo, rediseño completo según el sis
 - [x] Pantalla de inicio "Mi Resumen" / Dashboard para usuarios con cuenta (H27).
 - [x] Gestión de cuenta: perfil y selector dinámico de tema claro/oscuro (H28).
 - [x] Recordatorios de evaluaciones y fechas límites (H26).
+- [ ] Autenticación federada segura con Google Sign-In / Gmail (H29).
 - [ ] Exportar el resumen del ciclo en PDF o imagen.
 - [ ] Escanear todos los cursos de un ciclo en una sola captura.
 - [ ] Diseño de dos paneles para tablet y web.

@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Pondera (Debug)",
+            "request": "launch",
+            "type": "dart",
+            "program": "proyecto_moviles2_grupo03/lib/main.dart",
+            "cwd": "proyecto_moviles2_grupo03"
+        },
+        {
+            "name": "Pondera (Release)",
+            "request": "launch",
+            "type": "dart",
+            "program": "proyecto_moviles2_grupo03/lib/main.dart",
+            "cwd": "proyecto_moviles2_grupo03",
+            "flutterMode": "release"
+        }
+    ]
+}
