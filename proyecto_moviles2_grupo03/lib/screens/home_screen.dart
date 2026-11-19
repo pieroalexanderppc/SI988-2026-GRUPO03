@@ -1,6 +1,8 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../providers/componentes_provider.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/banner_sin_cuenta.dart';
@@ -10,13 +12,15 @@ import '../widgets/cta_crear_cuenta.dart';
 import '../widgets/fila_componente.dart';
 import '../widgets/linea_pesos.dart';
 import '../services/calculadora_promedio.dart';
+
 import 'welcome_screen.dart';
 import 'auth_screen.dart';
 import 'ciclos_screen.dart';
+import 'historial_notas_screen.dart';
 import 'recordatorios_screen.dart';
 
-/// Pantalla principal: calculadora rapida de promedio ponderado
-/// (DESIGN.md pantalla 10). Sirve tanto con cuenta como sin cuenta.
+/// Pantalla principal: calculadora rapida de promedio ponderado.
+/// Sirve tanto con cuenta como sin cuenta.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -25,13 +29,22 @@ class HomeScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('¿Reiniciar la calculadora?'),
-        content: const Text('Se borrarán los componentes actuales y volverás a 2 filas vacías.'),
+        content: const Text(
+          'Se borrarán los componentes actuales y volverás a 2 filas vacías.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Reiniciar')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reiniciar'),
+          ),
         ],
       ),
     );
+
     if (confirmar == true && context.mounted) {
       context.read<ComponentesProvider>().reiniciar();
     }
@@ -40,11 +53,13 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     User? user;
+
     try {
       user = FirebaseAuth.instance.currentUser;
     } catch (e) {
       user = null;
     }
+
     // Una cuenta sin verificar se trata como modo sin cuenta.
     final esSinCuenta = user == null || !user.emailVerified;
     final String userName = user?.email?.split('@').first ?? '';
@@ -67,16 +82,32 @@ class HomeScreen extends StatelessWidget {
               titulo: 'Calculadora rápida',
               mostrarAtras: false,
               acciones: [
-                // H10 - Acceso a gestion de ciclos
+                // H33 - Historial de notas
+                IconButton(
+                  icon: const Icon(Icons.history_rounded),
+                  tooltip: 'Historial de notas',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const HistorialNotasScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                // H10 - Acceso a gestión de ciclos
                 IconButton(
                   icon: const Icon(Icons.school_rounded),
                   tooltip: 'Mis ciclos',
                   onPressed: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CiclosScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const CiclosScreen(),
+                      ),
                     );
                   },
                 ),
+
                 // H26 - Acceso a recordatorios de evaluaciones
                 IconButton(
                   icon: const Icon(Icons.event_note_rounded),
@@ -84,19 +115,25 @@ class HomeScreen extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (_) => const RecordatoriosScreen()),
+                        builder: (_) => const RecordatoriosScreen(),
+                      ),
                     );
                   },
                 ),
+
                 reiniciar,
+
                 IconButton(
                   icon: const Icon(Icons.logout_rounded),
                   tooltip: 'Cerrar sesión',
                   onPressed: () async {
                     await FirebaseAuth.instance.signOut();
+
                     if (context.mounted) {
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const WelcomeScreen(),
+                        ),
                         (route) => false,
                       );
                     }
@@ -104,21 +141,25 @@ class HomeScreen extends StatelessWidget {
                 ),
               ],
             ),
+
       body: Consumer<ComponentesProvider>(
         builder: (context, provider, child) {
           final componentes = provider.componentes;
-          final promedio = CalculadoraPromedio.calcularPromedio(componentes);
+          final promedio =
+              CalculadoraPromedio.calcularPromedio(componentes);
 
-          // Si no hay promedio, se explica por que (sin tocar la logica de H02).
           String textoSinNota = 'Sin notas aún';
           String? subtituloSinNota;
+
           if (promedio == null) {
             if (!provider.esSumaPesosValida) {
               textoSinNota = 'Completa los pesos';
-              subtituloSinNota = 'Deben sumar 100% para calcular';
+              subtituloSinNota =
+                  'Deben sumar 100% para calcular';
             } else {
               textoSinNota = 'Revisa los datos';
-              subtituloSinNota = 'Notas de 0 a 20 y pesos mayores a 0';
+              subtituloSinNota =
+                  'Notas de 0 a 20 y pesos mayores a 0';
             }
           }
 
@@ -129,20 +170,28 @@ class HomeScreen extends StatelessWidget {
                 const BannerSinCuenta(),
                 const SizedBox(height: 12),
               ],
+
               CardResultado(
                 nota: promedio,
                 titulo: 'Promedio final',
-                subtitulo: promedio == null ? subtituloSinNota : null,
+                subtitulo:
+                    promedio == null ? subtituloSinNota : null,
                 textoSinNota: textoSinNota,
               ),
+
               const SizedBox(height: 16),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: LineaPesos(suma: provider.sumaPesos),
               ),
+
               const SizedBox(height: 16),
+
               const _EncabezadoTabla(),
+
               const SizedBox(height: 8),
+
               for (final item in componentes) ...[
                 FilaComponente(
                   key: ValueKey(item.id),
@@ -151,12 +200,18 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
+
               const SizedBox(height: 4),
-              BotonPunteado(texto: 'Agregar componente', onPressed: provider.agregarComponente),
+
+              BotonPunteado(
+                texto: 'Agregar componente',
+                onPressed: provider.agregarComponente,
+              ),
             ],
           );
         },
       ),
+
       bottomNavigationBar: esSinCuenta
           ? Consumer<ComponentesProvider>(
               builder: (context, provider, child) => CtaCrearCuenta(
@@ -164,7 +219,8 @@ class HomeScreen extends StatelessWidget {
                 onCrearCuenta: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const AuthScreen(modoVincular: true),
+                      builder: (_) =>
+                          const AuthScreen(modoVincular: true),
                     ),
                   );
                 },
@@ -185,6 +241,7 @@ class _EncabezadoTabla extends StatelessWidget {
       fontWeight: FontWeight.w600,
       color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
+
     return ExcludeSemantics(
       child: Row(
         children: [
@@ -197,12 +254,20 @@ class _EncabezadoTabla extends StatelessWidget {
           const SizedBox(width: ColumnasComponente.separacion),
           SizedBox(
             width: ColumnasComponente.nota,
-            child: Text('Nota', textAlign: TextAlign.center, style: estilo),
+            child: Text(
+              'Nota',
+              textAlign: TextAlign.center,
+              style: estilo,
+            ),
           ),
           const SizedBox(width: ColumnasComponente.separacion),
           SizedBox(
             width: ColumnasComponente.peso,
-            child: Text('Peso %', textAlign: TextAlign.center, style: estilo),
+            child: Text(
+              'Peso %',
+              textAlign: TextAlign.center,
+              style: estilo,
+            ),
           ),
           const SizedBox(width: ColumnasComponente.borrar + 8),
         ],
