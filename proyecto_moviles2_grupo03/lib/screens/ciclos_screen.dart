@@ -11,6 +11,7 @@ import '../widgets/pondera_logo.dart';
 import '../widgets/seccion_titulo.dart';
 import '../widgets/tarjeta_ciclo.dart';
 import 'cursos_screen.dart';
+import 'recordatorios_screen.dart';
 
 /// Pantalla 03 - Tus ciclos (H10), con su estado vacio (03b).
 class CiclosScreen extends StatefulWidget {
@@ -121,6 +122,15 @@ class _CiclosScreenState extends State<CiclosScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.event_note_rounded),
+            tooltip: 'Recordatorios de evaluaciones',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RecordatoriosScreen()),
+              );
+            },
+          ),
           Semantics(
             label: 'Cuenta de $_nombreUsuario',
             child: CircleAvatar(

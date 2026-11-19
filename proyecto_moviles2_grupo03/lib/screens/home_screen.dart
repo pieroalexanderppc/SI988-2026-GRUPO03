@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../providers/componentes_provider.dart';
 import '../widgets/app_bar_nivel.dart';
 import '../widgets/banner_sin_cuenta.dart';
@@ -11,13 +12,15 @@ import '../widgets/cta_crear_cuenta.dart';
 import '../widgets/fila_componente.dart';
 import '../widgets/linea_pesos.dart';
 import '../services/calculadora_promedio.dart';
+
 import 'welcome_screen.dart';
 import 'auth_screen.dart';
 import 'ciclos_screen.dart';
 import 'historial_notas_screen.dart';
+import 'recordatorios_screen.dart';
 
-/// Pantalla principal: calculadora rapida de promedio ponderado
-/// (DESIGN.md pantalla 10). Sirve tanto con cuenta como sin cuenta.
+/// Pantalla principal: calculadora rapida de promedio ponderado.
+/// Sirve tanto con cuenta como sin cuenta.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -92,7 +95,7 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
 
-                // H10 - Acceso a gestion de ciclos
+                // H10 - Acceso a gestión de ciclos
                 IconButton(
                   icon: const Icon(Icons.school_rounded),
                   tooltip: 'Mis ciclos',
@@ -100,6 +103,19 @@ class HomeScreen extends StatelessWidget {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const CiclosScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                // H26 - Acceso a recordatorios de evaluaciones
+                IconButton(
+                  icon: const Icon(Icons.event_note_rounded),
+                  tooltip: 'Recordatorios',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const RecordatoriosScreen(),
                       ),
                     );
                   },
