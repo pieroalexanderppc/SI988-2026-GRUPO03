@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +12,7 @@ import '../services/calculos_multinivel.dart';
 import '../services/calculos_prioridades.dart';
 import '../services/ciclos_service.dart';
 import '../services/cursos_service.dart';
+import '../services/exportador_excel_service.dart';
 import '../services/reporte_ciclo_pdf.dart';
 import '../theme/estado_nota_colors.dart';
 import '../widgets/app_bar_nivel.dart';
@@ -24,6 +26,7 @@ import 'escanear_notas_screen.dart';
 import 'evolucion_screen.dart';
 import 'prioridades_screen.dart';
 import 'recordatorios_screen.dart';
+import 'simulador_ciclo_screen.dart';
 import 'unidades_screen.dart';
 import 'vista_previa_pdf_screen.dart';
 
@@ -236,6 +239,24 @@ class _CursosScreenState extends State<CursosScreen> {
     if (mounted) _recalcular();
   }
 
+  Future<void> _abrirSimuladorCiclo() async {
+    if (_ultimosCursos.isEmpty) {
+      _mostrarMensaje('Agrega cursos en este ciclo para usar el simulador.');
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SimuladorCicloScreen(
+          cicloId: widget.cicloId,
+          cicloNombre: widget.cicloNombre,
+          cursos: _ultimosCursos,
+          resultados: _ultimosResultados,
+        ),
+      ),
+    );
+    if (mounted) _recalcular();
+  }
+
   Future<void> _exportarPdf({
     required List<Curso> cursos,
     required Map<String, ResultadoCalculoCurso> resultados,
@@ -282,7 +303,7 @@ class _CursosScreenState extends State<CursosScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Text(
-                  'Reporte del ciclo (${widget.cicloNombre})',
+                  'Exportar reporte (${widget.cicloNombre})',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -292,7 +313,7 @@ class _CursosScreenState extends State<CursosScreen> {
               ListTile(
                 leading: const Icon(Icons.visibility_rounded,
                     color: Color(0xFF3B36C4)),
-                title: const Text('Ver e imprimir reporte'),
+                title: const Text('Ver e imprimir reporte PDF'),
                 subtitle:
                     const Text('Visualiza el PDF con zoom e impresión directa'),
                 onTap: () {
@@ -313,7 +334,7 @@ class _CursosScreenState extends State<CursosScreen> {
                     color: Color(0xFF157A45)),
                 title: const Text('Compartir archivo PDF'),
                 subtitle:
-                    const Text('Enviar por WhatsApp, correo o guardar'),
+                    const Text('Enviar PDF por WhatsApp, correo o guardar'),
                 onTap: () async {
                   Navigator.of(bottomContext).pop();
                   try {
@@ -326,6 +347,74 @@ class _CursosScreenState extends State<CursosScreen> {
                   } catch (_) {
                     if (mounted) {
                       _mostrarMensaje('No se pudo compartir el PDF.');
+                    }
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.table_chart_rounded,
+                    color: Color(0xFF157A45)),
+                title: const Text('Exportar a Excel (.xlsx)'),
+                subtitle: const Text(
+                    'Libro estructurado con paleta índigo, formatos y fórmulas dinámicas'),
+                onTap: () async {
+                  Navigator.of(bottomContext).pop();
+                  try {
+                    _mostrarMensaje('Generando libro de Excel…');
+                    final excelBytes = ExportadorExcelService.generarExcel(
+                      cicloNombre: widget.cicloNombre,
+                      cursos: cursos,
+                      resultados: resultados,
+                      promedioCiclo: promedioCiclo,
+                      totalCreditos: totalCreditos,
+                      nombreEstudiante: nombreEstudiante,
+                      correoEstudiante: correoEstudiante,
+                    );
+                    final nombreXlsx = 'Reporte_Pondera_$nombreLimpio.xlsx';
+                    await ExportadorExcelService.compartirArchivo(
+                      bytes: excelBytes,
+                      nombreArchivo: nombreXlsx,
+                      mimeType:
+                          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                      subject: 'Reporte Excel Pondera - ${widget.cicloNombre}',
+                    );
+                  } catch (_) {
+                    if (mounted) {
+                      _mostrarMensaje('No se pudo exportar el archivo Excel.');
+                    }
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.description_outlined,
+                    color: Color(0xFF3B36C4)),
+                title: const Text('Exportar a CSV (.csv UTF-8)'),
+                subtitle: const Text(
+                    'Tabla plana delimitada compatible con Excel (BOM UTF-8)'),
+                onTap: () async {
+                  Navigator.of(bottomContext).pop();
+                  try {
+                    _mostrarMensaje('Generando archivo CSV…');
+                    final csvString = ExportadorExcelService.generarCsv(
+                      cicloNombre: widget.cicloNombre,
+                      cursos: cursos,
+                      resultados: resultados,
+                      promedioCiclo: promedioCiclo,
+                      totalCreditos: totalCreditos,
+                      nombreEstudiante: nombreEstudiante,
+                      correoEstudiante: correoEstudiante,
+                    );
+                    final csvBytes = Uint8List.fromList(utf8.encode(csvString));
+                    final nombreCsv = 'Reporte_Pondera_$nombreLimpio.csv';
+                    await ExportadorExcelService.compartirArchivo(
+                      bytes: csvBytes,
+                      nombreArchivo: nombreCsv,
+                      mimeType: 'text/csv',
+                      subject: 'Reporte CSV Pondera - ${widget.cicloNombre}',
+                    );
+                  } catch (_) {
+                    if (mounted) {
+                      _mostrarMensaje('No se pudo exportar el archivo CSV.');
                     }
                   }
                 },
@@ -382,10 +471,15 @@ class _CursosScreenState extends State<CursosScreen> {
               context,
               titulo: widget.cicloNombre,
               opciones: [
-                if (_ultimosCursos.isNotEmpty)
+                if (_ultimosCursos.isNotEmpty) ...[
                   OpcionMenu(
-                    icono: Icons.picture_as_pdf_rounded,
-                    texto: 'Exportar reporte (PDF)',
+                    icono: Icons.auto_graph_rounded,
+                    texto: 'Simulador multiescenario (H36)',
+                    onTap: _abrirSimuladorCiclo,
+                  ),
+                  OpcionMenu(
+                    icono: Icons.file_download_outlined,
+                    texto: 'Exportar reporte (PDF / Excel / CSV)',
                     onTap: () => _exportarPdf(
                       cursos: _ultimosCursos,
                       resultados: _ultimosResultados,
@@ -393,6 +487,7 @@ class _CursosScreenState extends State<CursosScreen> {
                       totalCreditos: _ultimosCreditos,
                     ),
                   ),
+                ],
                 OpcionMenu(
                   icono: Icons.delete_outline_rounded,
                   texto: 'Eliminar ciclo',
@@ -510,18 +605,29 @@ class _CursosScreenState extends State<CursosScreen> {
           TarjetaPrioridad(principal: principal, enCiclo: true, onTap: _abrirPrioridades),
         ],
         const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _exportarPdf(
-              cursos: cursos,
-              resultados: resultados,
-              promedioCiclo: promedio,
-              totalCreditos: totalCreditos,
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _abrirSimuladorCiclo,
+                icon: const Icon(Icons.auto_graph_rounded),
+                label: const Text('Simulador (H36)'),
+              ),
             ),
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            label: const Text('Exportar reporte del ciclo (PDF)'),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _exportarPdf(
+                  cursos: cursos,
+                  resultados: resultados,
+                  promedioCiclo: promedio,
+                  totalCreditos: totalCreditos,
+                ),
+                icon: const Icon(Icons.file_download_outlined),
+                label: const Text('Exportar reporte'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 22),
         SeccionTitulo(
